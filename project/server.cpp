@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fcntl.h>
 #include <cstdint>
+#include <vector>
 
 using namespace std;
 
@@ -20,7 +21,7 @@ struct Packet {
     char payload[1024]; // Maximum segment size
 };
 
-void create_packet(std::vector<Packet> &packets, uint32_t packet_number, uint32_t ack_number, const char *payload) {
+void create_packet(vector<Packet> &packets, uint32_t packet_number, uint32_t ack_number, const char *payload) {
     Packet packet;
     packet.packet_number = htonl(packet_number);
     packet.ack_number = htonl(ack_number);
@@ -75,18 +76,21 @@ int main(int argc, char *argv[]) {
       exit(3);
     } 
 
+    //define buffer for receiving packets from client
+    vector<Packet*> client_receive_buffer;
+
     while(true){
       /* 4. Create buffer to store incoming data */
       // READ FROM CLIENT
       bool client_sent_data = false;
 
       int BUF_SIZE = 1024;
-      char client_buf[BUF_SIZE];
+      char* client_buf[BUF_SIZE]; // changed to ptr
       struct sockaddr_in clientaddr; // Same information, but about client
       socklen_t clientsize = sizeof(clientaddr);
 
       /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
+      int bytes_recvd = recvfrom(sockfd, &client_buf, BUF_SIZE, 
                               // socket  store data  how much
                                 0, (struct sockaddr*) &clientaddr, 
                                 &clientsize);
@@ -97,7 +101,11 @@ int main(int argc, char *argv[]) {
         client_sent_data = true;
 
       if(client_sent_data){
-        // add in packet stuff
+        // casting received data to a packet
+        Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
+        //one packet received at a time
+        client_receive_buffer.push_back(client_packet);
+
         // TODO: reorder the packets and write out message
         cout << "Message: " << client_buf << endl;
 
