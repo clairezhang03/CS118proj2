@@ -75,67 +75,54 @@ int main(int argc, char *argv[]) {
       exit(3);
     } 
 
-    fd_set readfds;
-    int maxfd;
     while(true){
-      FD_ZERO(&readfds);
-      FD_SET(STDIN_FILENO, &readfds);
-      FD_SET(sockfd, &readfds);
+      /* 4. Create buffer to store incoming data */
+      // READ FROM CLIENT
+      bool client_sent_data = false;
 
-      maxfd = sockfd;
+      int BUF_SIZE = 1024;
+      char client_buf[BUF_SIZE];
+      struct sockaddr_in clientaddr; // Same information, but about client
+      socklen_t clientsize = sizeof(clientaddr);
 
-      int activity = select(maxfd + 1, &readfds, NULL, NULL, NULL);
-      if (activity < 0) {
-        cerr << "socket failed to bind" << endl;
-        exit(3);
+      /* 5. Listen for data from clients */
+      int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
+                              // socket  store data  how much
+                                0, (struct sockaddr*) &clientaddr, 
+                                &clientsize);
+
+      // Execution will stop here until `BUF_SIZE` is read or termination/error
+      // bytes received is
+      if (bytes_recvd >= 0) 
+        client_sent_data = true;
+
+      if(client_sent_data){
+        // add in packet stuff
+        // TODO: reorder the packets and write out message
+        cout << "Message: " << client_buf << endl;
+
+         /* 6. Inspect data from client */
+        char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+        int client_port = ntohs(clientaddr.sin_port); // Little endian
+
+      // TODO: send an ACK back
+        // add in packet
+        /* 7. Send data back to client */
+        char server_buf[] = "Hello world!";
+        int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                          // socket  send data   how much to send
+                              0, (struct sockaddr*) &clientaddr, 
+                          // flags   where to send
+                              sizeof(clientaddr));
+        if (did_send < 0) {
+            cerr << "failed to send data from server to client" << endl;
+            exit(3);
+          } 
+          // TODO: send ACK back to client
       }
-
-      // If something happened on the socket, then it is an incoming packet
-        if (FD_ISSET(sockfd, &readfds)) {
-            /* 4. Create buffer to store incoming data */
-            int BUF_SIZE = 1024;
-            char client_buf[BUF_SIZE];
-            struct sockaddr_in clientaddr; // Same information, but about client
-            socklen_t clientsize = sizeof(clientaddr);
-
-            /* 5. Listen for data from clients */
-            int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
-                                    // socket  store data  how much
-                                      0, (struct sockaddr*) &clientaddr, 
-                                      &clientsize);
-            // Execution will stop here until `BUF_SIZE` is read or termination/error
-            // Error if bytes_recvd < 0 :(
-            if (bytes_recvd < 0) {
-              continue;
-              // cerr << "failed to read buffer" << endl;
-              // exit(3);
-            }   
-            
-            // TODO: reorder the packets and write out message
-
-           cout << "Message: " << client_buf << endl;
-          
-            // send ACK back to client
-
-            /* 6. Inspect data from client */
-            char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-            int client_port = ntohs(clientaddr.sin_port); // Little endian
-
-            // TODO: send an ACK back
-            // add in packet
-            /* 7. Send data back to client */
-            char server_buf[] = "Hello world!";
-            int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-                              // socket  send data   how much to send
-                                  0, (struct sockaddr*) &clientaddr, 
-                              // flags   where to send
-                                  sizeof(clientaddr));
-            if (did_send < 0) {
-                cerr << "failed to send data from server to client" << endl;
-                exit(3);
-              } 
-        }
-
+      
+      
+      // PART 2: STANDARD IN 
         // If something happened on stdin, then we read the input
         if (FD_ISSET(STDIN_FILENO, &readfds)) {
           char buffer[BUFFER_SIZE];

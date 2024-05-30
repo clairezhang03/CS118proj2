@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
                                &serversize);
     // Execution will stop here until `BUF_SIZE` is read or termination/error
     // Error if bytes_recvd < 0 :(
-    if (bytes_recvd < 0) return errno;
+    if (bytes_recvd < 0) return errno; // continue
     // Print out data
     write(1, server_buf, bytes_recvd);
 
