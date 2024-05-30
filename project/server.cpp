@@ -66,37 +66,23 @@ int main(int argc, char *argv[]) {
      cout << "Message: " << client_buf << endl;
     
 
-    /* 6. Inspect data from client */
-    char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-    int client_port = ntohs(clientaddr.sin_port); // Little endian
+      /* 6. Inspect data from client */
+      char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+      int client_port = ntohs(clientaddr.sin_port); // Little endian
 
-    /* 7. Send data back to client */
-    char server_buf[] = "Hello world!";
-    int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-                       // socket  send data   how much to send
-                          0, (struct sockaddr*) &clientaddr, 
-                       // flags   where to send
-                          sizeof(clientaddr));
-    if (did_send < 0) {
-        cerr << "failed to send data from server to client" << endl;
-        exit(3);
-      } 
+      /* 7. Send data back to client */
+      char server_buf[] = "Hello world!";
+      int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                        // socket  send data   how much to send
+                            0, (struct sockaddr*) &clientaddr, 
+                        // flags   where to send
+                            sizeof(clientaddr));
+      if (did_send < 0) {
+          cerr << "failed to send data from server to client" << endl;
+          exit(3);
+        } 
+    }
      /* 8. You're done! Terminate the connection */     
     close(sockfd);
     return 0;
-}
-
-
-
-
-    
-    
-
-    
-    // Print out data
-    write(1, client_buf, bytes_recvd);
-
-    
-
- 
 }
