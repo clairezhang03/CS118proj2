@@ -19,6 +19,10 @@ int next_ack_number = 0;
 vector<Packet> send_packets_buff;
 int send_base = 0;
 
+//Dane code:
+  //CHANGED-- anything he changed from other's code
+  //CHANGE-- things that might be wrong
+
 struct Packet {
     uint32_t packet_number;
     uint32_t ack_number;
@@ -129,6 +133,11 @@ int main(int argc, char *argv[]) {
       exit(3);
     } 
 
+    //define buffer for receiving packets from client
+    vector<Packet*> client_receive_buffer;
+    //define packet expected number
+    u_int32_t client_packet_expected = 1;
+
     while(true){
       /* 4. Create buffer to store incoming data */
       // READ FROM CLIENT
@@ -150,9 +159,22 @@ int main(int argc, char *argv[]) {
         client_sent_data = true;
 
       if(client_sent_data){
-        // add in packet stuff
+        // casting received data to a packet
+        Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
+        //one packet received at a time
+        client_receive_buffer.push_back(client_packet);
+
+        //check if it's in order
+        //note: client_receive_buffer -- index + 1 should = packet #
+        u_int32_t client_packet_temp = client_packet->packet_number;
+        //check with expected packet #
+        if (client_packet_temp != client_packet_expected){
+          //TODO: Error protocol?
+        }
+        client_packet_expected++;
+
         // TODO: reorder the packets and write out message
-        cout << "Message: " << client_buf << endl;
+        cout << "Message: " << &client_buf << endl;
 
          /* 6. Inspect data from client */
         char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
