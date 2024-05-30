@@ -4,11 +4,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+using namespace std;
 
 int main(int argc, char *argv[]) {
+  
     /* 1. Create socket */
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
                      // use IPv4  use UDP
+    
 
     /* 2. Construct server address */
     struct sockaddr_in serveraddr;
