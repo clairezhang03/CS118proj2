@@ -7,27 +7,80 @@
 #include <iostream>
 #include <fcntl.h>
 #include <cstdint>
+#include <vector>
 
 using namespace std;
 
-#define MSS = 1024; 
-#define MAX_BUFFER_SIZE = 2048000; //1024 * 2000
+#define MSS 1024
+#define MAX_BUFFER_SIZE 2048000 //1024 * 2000
+
+int next_available_seq_num = 0;
+int next_ack_number = 0;
+vector<Packet> send_packets_buff;
+int send_base = 0;
 
 struct Packet {
     uint32_t packet_number;
     uint32_t ack_number;
     uint16_t payload_size;
     uint16_t padding;
-    char payload[1024]; // Maximum segment size
+    char* payload[1024]; // Maximum segment size
 };
 
-void create_packet(std::vector<Packet> &packets, uint32_t packet_number, uint32_t ack_number, const char *payload) {
-    Packet packet;
-    packet.packet_number = htonl(packet_number);
-    packet.ack_number = htonl(ack_number);
-    packet.payload_size = htons(1024);
-    std::memcpy(packet.payload, payload, 1024);
-    packets.push_back(packet);
+void create_packets(char *std_in_buffer, int length){
+    /*
+    Formula Breakdown
+      - length is an exact multiple of MSS, adding MSS - 1 does not change the number of chunks
+      - When there is a remainder, adding MSS - 1 
+          makes the integer division result increase by 1
+           accounting for the partial chunk.
+    */
+
+    int num_chunks = (length + MSS - 1) / MSS;
+
+    for (int i = 0; i < num_chunks; i++) {
+        char *payload_buff = new char[MSS]; 
+        int start = i * MSS;
+        int end = start + MSS;
+
+        // Ensure we do not read beyond the buffer's length
+        if (end > length) 
+            end = length;
+
+        int payload_buff_length = end - start;
+        memcpy(payload_buff, &std_in_buffer + start, payload_buff_length);
+
+        // create a new packet
+        struct Packet* pkt = new Packet;
+        pkt->packet_number = next_available_seq_num++;
+        pkt->ack_number = next_ack_number; // This can be set to some relevant value
+        pkt->payload_size = payload_buff_length; // either size 1024 or less
+        pkt->padding = 0; // TODO: CHANGE TO CORRECT PADDING
+        pkt->payload = payload_buff;
+
+        send_packets_buff.push_back(pkt);
+    }
+}
+
+void send_packets(int sockfd, const struct sockaddr_in clientaddr, const socklen_t clientsize){
+  int send_end = send_base + 20; // end of packet buffer
+  int send_packet_buff_size = send_packets_buff.size(); // highest_packet_num + 1
+
+  int limit = send_packet_buff_size < send_end ? send_packet_buff_size : send_end;
+  for(; send_base < limit; send_base++){
+    int packet_size = send_packets_buff[send_base] -> payload_size;
+
+    // send packet to client
+    int did_send = sendto(sockfd, static_cast <void *> (send_packets_buff[send_base]), packet_size, 
+                        // socket  send data   how much to send
+                            0, (struct sockaddr*) &clientaddr, 
+                          // flags   where to send
+                            sizeof(clientaddr));
+    if (did_send < 0) {
+      cerr << "failed to send data from server to client" << endl;
+      exit(3);
+    } 
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -81,13 +134,12 @@ int main(int argc, char *argv[]) {
       // READ FROM CLIENT
       bool client_sent_data = false;
 
-      int BUF_SIZE = 1024;
-      char client_buf[BUF_SIZE];
+      char client_buf[MSS];
       struct sockaddr_in clientaddr; // Same information, but about client
       socklen_t clientsize = sizeof(clientaddr);
 
       /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
+      int bytes_recvd = recvfrom(sockfd, client_buf, MSS, 
                               // socket  store data  how much
                                 0, (struct sockaddr*) &clientaddr, 
                                 &clientsize);
@@ -124,38 +176,42 @@ int main(int argc, char *argv[]) {
       
       
       // PART 2: STANDARD IN 
-        // If something happened on stdin, then we read the input
-        bool std_in_given = false;
+      // If something happened on stdin, then we read the input
+      bool std_in_given = false;
+      char* std_in_buffer = new char[MAX_BUFFER_SIZE];
 
-        char std_in_buffer[MAX_BUFFER_SIZE];
-        if (read(STDIN_FILENO, std_in_buffer, MAX_BUFFER_SIZE) >= 0){
-          std_in_given = true;
+      int bytes_read = read(STDIN_FILENO, std_in_buffer, MAX_BUFFER_SIZE);
+      if (bytes_read >= 0)
+        std_in_given = true;
+
+      if(std_in_given){
+          // create packet and send to client
+        create_packets(std_in_buffer, bytes_read);
+        send_packets(sockfd, clientaddr, clientsize);
+
+
+        /* 6. Inspect data from client */
+        char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+        int client_port = ntohs(clientaddr.sin_port); // Little endian
+
+        // add in packet
+        /* 7. Send data back to client */
+        char server_buf[] = "Hello world!";
+        int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                          // socket  send data   how much to send
+                              0, (struct sockaddr*) &clientaddr, 
+                          // flags   where to send
+                              sizeof(clientaddr));
+
+        if (did_send < 0) {
+            cerr << "failed to send data from server to client" << endl;
+            exit(3);
         }
+      }        
 
-        if(std_in_given){
-           // create packet and send to client
-          /* 6. Inspect data from client */
-          char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-          int client_port = ntohs(clientaddr.sin_port); // Little endian
-
-          // add in packet
-          /* 7. Send data back to client */
-          char server_buf[] = "Hello world!";
-          int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-                            // socket  send data   how much to send
-                                0, (struct sockaddr*) &clientaddr, 
-                            // flags   where to send
-                                sizeof(clientaddr));
-          if (did_send < 0) {
-              cerr << "failed to send data from server to client" << endl;
-              exit(3);
-          }
-        }         
-         /* 8. You're done! Terminate the connection */     
-    close(sockfd);
-    return 0; 
-    }
-
-      
+      /* 8. You're done! Terminate the connection */     
+      close(sockfd);
+      return 0; 
+    } 
   }
   
