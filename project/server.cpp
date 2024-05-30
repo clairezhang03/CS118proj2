@@ -5,19 +5,41 @@
 #include <unistd.h>
 #include <errno.h>
 #include <iostream>
+#include <fcntl.h>
+#include <cstdint>
 
 using namespace std;
 
+#define BUFFER_SIZE = 1024; 
+
+struct Packet {
+    uint32_t packet_number;
+    uint32_t ack_number;
+    uint16_t payload_size;
+    uint16_t padding;
+    char payload[1024]; // Maximum segment size
+};
+
+void create_packet(std::vector<Packet> &packets, uint32_t packet_number, uint32_t ack_number, const char *payload) {
+    Packet packet;
+    packet.packet_number = htonl(packet_number);
+    packet.ack_number = htonl(ack_number);
+    packet.payload_size = htons(1024);
+    std::memcpy(packet.payload, payload, 1024);
+    packets.push_back(packet);
+}
+
 int main(int argc, char *argv[]) {
   // does not have proper formatting for error
-    if (argc != 3) {
-        cerr << "Usage: server <port> <private_key_file> <certificate_file>" << endl;
+    if (argc < 5) { 
+        cerr << "Usage: server <flag> <port> <private_key_file> <certificate_file>" << endl;
         exit(3);
     }
 
-    int port = stoi(argv[1]);
-    const char* private_key_file = argv[2];
-    const char* certificate_file = argv[3];
+    int flag = stoi(argv[1]);
+    int port = stoi(argv[2]);
+    const char* private_key_file = argv[3];
+    const char* certificate_file = argv[4];
     
     /* 1. Create socket */
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -27,6 +49,15 @@ int main(int argc, char *argv[]) {
         cerr << "socket creation failed" << endl;
         exit(3);
     }
+
+    // Setup fd set for nonblock
+    int flags = fcntl(sockfd, F_GETFL);
+    flags |= O_NONBLOCK;
+    fcntl(sockfd, F_SETFL, flags);
+
+    int flags_stdin = fcntl(STDIN_FILENO, F_GETFL);
+    flags_stdin |= O_NONBLOCK;
+    fcntl(STDIN_FILENO, F_SETFL, flags_stdin);
 
     /* 2. Construct our address */
     struct sockaddr_in servaddr;
@@ -44,43 +75,101 @@ int main(int argc, char *argv[]) {
       exit(3);
     } 
 
+    fd_set readfds;
+    int maxfd;
     while(true){
-      /* 4. Create buffer to store incoming data */
-      int BUF_SIZE = 1024;
-      char client_buf[BUF_SIZE];
-      struct sockaddr_in clientaddr; // Same information, but about client
-      socklen_t clientsize = sizeof(clientaddr);
+      FD_ZERO(&readfds);
+      FD_SET(STDIN_FILENO, &readfds);
+      FD_SET(sockfd, &readfds);
 
-      /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
-                              // socket  store data  how much
-                                0, (struct sockaddr*) &clientaddr, 
-                                &clientsize);
-      // Execution will stop here until `BUF_SIZE` is read or termination/error
-      // Error if bytes_recvd < 0 :(
-      if (bytes_recvd < 0) {
-        cerr << "failed to read buffer" << endl;
+      maxfd = sockfd;
+
+      int activity = select(maxfd + 1, &readfds, NULL, NULL, NULL);
+      if (activity < 0) {
+        cerr << "socket failed to bind" << endl;
         exit(3);
-      } 
+      }
+
+      // If something happened on the socket, then it is an incoming packet
+        if (FD_ISSET(sockfd, &readfds)) {
+            /* 4. Create buffer to store incoming data */
+            int BUF_SIZE = 1024;
+            char client_buf[BUF_SIZE];
+            struct sockaddr_in clientaddr; // Same information, but about client
+            socklen_t clientsize = sizeof(clientaddr);
+
+            /* 5. Listen for data from clients */
+            int bytes_recvd = recvfrom(sockfd, client_buf, BUF_SIZE, 
+                                    // socket  store data  how much
+                                      0, (struct sockaddr*) &clientaddr, 
+                                      &clientsize);
+            // Execution will stop here until `BUF_SIZE` is read or termination/error
+            // Error if bytes_recvd < 0 :(
+            if (bytes_recvd < 0) {
+              continue;
+              // cerr << "failed to read buffer" << endl;
+              // exit(3);
+            }   
+            
+            // TODO: reorder the packets and write out message
+
+           cout << "Message: " << client_buf << endl;
+          
+            // send ACK back to client
+
+            /* 6. Inspect data from client */
+            char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+            int client_port = ntohs(clientaddr.sin_port); // Little endian
+
+            // TODO: send an ACK back
+            // add in packet
+            /* 7. Send data back to client */
+            char server_buf[] = "Hello world!";
+            int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                              // socket  send data   how much to send
+                                  0, (struct sockaddr*) &clientaddr, 
+                              // flags   where to send
+                                  sizeof(clientaddr));
+            if (did_send < 0) {
+                cerr << "failed to send data from server to client" << endl;
+                exit(3);
+              } 
+        }
+
+        // If something happened on stdin, then we read the input
+        if (FD_ISSET(STDIN_FILENO, &readfds)) {
+          char buffer[BUFFER_SIZE];
+          while(true){
+            std::cin.read(buffer, BUFFER_SIZE);
+            std::streamsize bytesRead = std::cin.gcount();
+
+
+            // create packet and send to client
+            // TODO: read from stdin and write back 
+
+            /* 6. Inspect data from client */
+            char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+            int client_port = ntohs(clientaddr.sin_port); // Little endian
+
+            // add in packet
+            /* 7. Send data back to client */
+            char server_buf[] = "Hello world!";
+            int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                              // socket  send data   how much to send
+                                  0, (struct sockaddr*) &clientaddr, 
+                              // flags   where to send
+                                  sizeof(clientaddr));
+            if (did_send < 0) {
+                cerr << "failed to send data from server to client" << endl;
+                exit(3);
+            } 
+
+            if (std::cin.eof()) 
+              break;
+          }
+        }
+
       
-     cout << "Message: " << client_buf << endl;
-    
-
-      /* 6. Inspect data from client */
-      char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-      int client_port = ntohs(clientaddr.sin_port); // Little endian
-
-      /* 7. Send data back to client */
-      char server_buf[] = "Hello world!";
-      int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-                        // socket  send data   how much to send
-                            0, (struct sockaddr*) &clientaddr, 
-                        // flags   where to send
-                            sizeof(clientaddr));
-      if (did_send < 0) {
-          cerr << "failed to send data from server to client" << endl;
-          exit(3);
-        } 
     }
      /* 8. You're done! Terminate the connection */     
     close(sockfd);
