@@ -14,6 +14,10 @@ using namespace std;
 #define MSS = 1024; 
 #define MAX_BUFFER_SIZE = 2048000; //1024 * 2000
 
+//Dane code:
+  //CHANGED-- anything he changed from other's code
+  //CHANGE-- things that might be wrong
+
 struct Packet {
     uint32_t packet_number;
     uint32_t ack_number;
@@ -79,14 +83,16 @@ int main(int argc, char *argv[]) {
 
     //define buffer for receiving packets from client
     vector<Packet*> client_receive_buffer;
+    //define packet expected number
+    u_int32_t client_packet_expected = 1;
 
     while(true){
       /* 4. Create buffer to store incoming data */
       // READ FROM CLIENT
       bool client_sent_data = false;
 
-      int BUF_SIZE = 1024;
-      char* client_buf[BUF_SIZE]; // changed to ptr
+      int BUF_SIZE = 1024; //CHANGE - potentially have to make larger to 1036
+      char* client_buf[BUF_SIZE]; //CHANGED - to ptr -- also changed all uses of client_buf in server.cpp
       struct sockaddr_in clientaddr; // Same information, but about client
       socklen_t clientsize = sizeof(clientaddr);
 
@@ -107,8 +113,17 @@ int main(int argc, char *argv[]) {
         //one packet received at a time
         client_receive_buffer.push_back(client_packet);
 
+        //check if it's in order
+        //note: client_receive_buffer -- index + 1 should = packet #
+        u_int32_t client_packet_temp = client_packet->packet_number;
+        //check with expected packet #
+        if (client_packet_temp != client_packet_expected){
+          //TODO: Error protocol?
+        }
+        client_packet_expected++;
+
         // TODO: reorder the packets and write out message
-        cout << "Message: " << client_buf << endl;
+        cout << "Message: " << &client_buf << endl;
 
          /* 6. Inspect data from client */
         char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
