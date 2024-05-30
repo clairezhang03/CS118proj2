@@ -11,7 +11,8 @@
 
 using namespace std;
 
-#define BUFFER_SIZE = 1024; 
+#define MSS = 1024; 
+#define MAX_BUFFER_SIZE = 2048000; //1024 * 2000
 
 struct Packet {
     uint32_t packet_number;
@@ -113,7 +114,7 @@ int main(int argc, char *argv[]) {
         char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
         int client_port = ntohs(clientaddr.sin_port); // Little endian
 
-      // TODO: send an ACK back
+        // TODO: send an ACK back
         // add in packet
         /* 7. Send data back to client */
         char server_buf[] = "Hello world!";
@@ -132,41 +133,37 @@ int main(int argc, char *argv[]) {
       
       // PART 2: STANDARD IN 
         // If something happened on stdin, then we read the input
-        if (FD_ISSET(STDIN_FILENO, &readfds)) {
-          char buffer[BUFFER_SIZE];
-          while(true){
-            std::cin.read(buffer, BUFFER_SIZE);
-            std::streamsize bytesRead = std::cin.gcount();
+        bool std_in_given = false;
 
-
-            // create packet and send to client
-            // TODO: read from stdin and write back 
-
-            /* 6. Inspect data from client */
-            char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-            int client_port = ntohs(clientaddr.sin_port); // Little endian
-
-            // add in packet
-            /* 7. Send data back to client */
-            char server_buf[] = "Hello world!";
-            int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-                              // socket  send data   how much to send
-                                  0, (struct sockaddr*) &clientaddr, 
-                              // flags   where to send
-                                  sizeof(clientaddr));
-            if (did_send < 0) {
-                cerr << "failed to send data from server to client" << endl;
-                exit(3);
-            } 
-
-            if (std::cin.eof()) 
-              break;
-          }
+        char std_in_buffer[MAX_BUFFER_SIZE];
+        if (read(STDIN_FILENO, std_in_buffer, MAX_BUFFER_SIZE) >= 0){
+          std_in_given = true;
         }
 
-      
-    }
-     /* 8. You're done! Terminate the connection */     
+        if(std_in_given){
+           // create packet and send to client
+          /* 6. Inspect data from client */
+          char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+          int client_port = ntohs(clientaddr.sin_port); // Little endian
+
+          // add in packet
+          /* 7. Send data back to client */
+          char server_buf[] = "Hello world!";
+          int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                            // socket  send data   how much to send
+                                0, (struct sockaddr*) &clientaddr, 
+                            // flags   where to send
+                                sizeof(clientaddr));
+          if (did_send < 0) {
+              cerr << "failed to send data from server to client" << endl;
+              exit(3);
+          }
+        }         
+         /* 8. You're done! Terminate the connection */     
     close(sockfd);
-    return 0;
-}
+    return 0; 
+    }
+
+      
+  }
+  
