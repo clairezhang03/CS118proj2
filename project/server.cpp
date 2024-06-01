@@ -14,22 +14,22 @@ using namespace std;
 #define MSS 1024
 #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
 
-int next_available_seq_num = 0;
-int next_ack_number = 0;
-vector<Packet> send_packets_buff;
-int send_base = 0;
-
-//Dane code:
-  //CHANGED-- anything he changed from other's code
-  //CHANGE-- things that might be wrong
-
 struct Packet {
     uint32_t packet_number;
     uint32_t ack_number;
     uint16_t payload_size;
     uint16_t padding;
-    char* payload[1024]; // Maximum segment size
+    char* payload; // Maximum segment size
 };
+
+int next_available_seq_num = 1;
+int next_ack_number = 0;
+vector<Packet*> send_packets_buff;
+int send_base = 0;
+
+//Dane code:
+  //CHANGED-- anything he changed from other's code
+  //CHANGE-- things that might be wrong
 
 void create_packets(char *std_in_buffer, int length){
     /*
@@ -41,6 +41,7 @@ void create_packets(char *std_in_buffer, int length){
     */
 
     int num_chunks = (length + MSS - 1) / MSS;
+    cout << "Number of chunks = " << num_chunks;
 
     for (int i = 0; i < num_chunks; i++) {
         char *payload_buff = new char[MSS]; 
@@ -52,7 +53,8 @@ void create_packets(char *std_in_buffer, int length){
             end = length;
 
         int payload_buff_length = end - start;
-        memcpy(payload_buff, &std_in_buffer + start, payload_buff_length);
+        cout << "start = " << start << ", end = " << end << ", payload_buff length = " << payload_buff_length << endl;
+        memcpy(payload_buff, std_in_buffer + start, payload_buff_length);
 
         // create a new packet
         struct Packet* pkt = new Packet;
@@ -63,6 +65,9 @@ void create_packets(char *std_in_buffer, int length){
         pkt->payload = payload_buff;
 
         send_packets_buff.push_back(pkt);
+         
+        printf("Packet %d: Packet Number = %u, Payload Size = %u, Payload = %s...\n",
+               i + 1, pkt->packet_number, pkt->payload_size, pkt->payload);
     }
 }
 
@@ -196,7 +201,6 @@ int main(int argc, char *argv[]) {
           // TODO: send ACK back to client
       }
       
-      
       // PART 2: STANDARD IN 
       // If something happened on stdin, then we read the input
       bool std_in_given = false;
@@ -207,33 +211,14 @@ int main(int argc, char *argv[]) {
         std_in_given = true;
 
       if(std_in_given){
-          // create packet and send to client
+        // create packet and send to client
+        // std::cout.write(std_in_buffer, bytes_read) << endl;
         create_packets(std_in_buffer, bytes_read);
         send_packets(sockfd, clientaddr, clientsize);
-
-
-        /* 6. Inspect data from client */
-        char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-        int client_port = ntohs(clientaddr.sin_port); // Little endian
-
-        // add in packet
-        /* 7. Send data back to client */
-        char server_buf[] = "Hello world!";
-        int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
-                          // socket  send data   how much to send
-                              0, (struct sockaddr*) &clientaddr, 
-                          // flags   where to send
-                              sizeof(clientaddr));
-
-        if (did_send < 0) {
-            cerr << "failed to send data from server to client" << endl;
-            exit(3);
-        }
       }        
-
-      /* 8. You're done! Terminate the connection */     
-      close(sockfd);
-      return 0; 
     } 
+     /* 8. You're done! Terminate the connection */     
+    close(sockfd);
+    return 0; 
   }
   
