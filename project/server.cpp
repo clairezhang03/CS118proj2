@@ -24,7 +24,7 @@ int main(int argc, char *argv[]) {
     }
 
     int flag = stoi(argv[1]);
-    int port = stoi(argv[2]);
+    int listening_port = stoi(argv[2]);
     const char* private_key_file = argv[3];
     const char* certificate_file = argv[4];
 
@@ -59,18 +59,42 @@ int main(int argc, char *argv[]) {
     // Construct address for sending data
     struct sockaddr_in servaddr;
     servaddr.sin_family = AF_INET; // use IPv4
-    servaddr.sin_port = htons(port); // set receiving port, Big endian
+    servaddr.sin_port = htons(listening_port); // set receiving port, Big endian
     servaddr.sin_addr.s_addr = INADDR_ANY; // accept all connections, // same as inet_addr("0.0.0.0") // "Address string to network bytes"
    
     /* 3. Let operating system know about our config */
-    int did_bind = bind(listen_sockfd, (struct sockaddr*) &servaddr, 
+    int listen_did_bind = bind(listen_sockfd, (struct sockaddr*) &servaddr, 
                         sizeof(servaddr));
     
     // Error if did_bind < 0 :(
-    if (did_bind < 0){
+    if (listen_did_bind < 0){
       cerr << "listening socket failed to bind" << endl;
       exit(3);
     } 
+
+    // repeat for client
+    struct sockaddr_in clientaddr; // Same information, but about client
+    socklen_t clientsize = sizeof(clientaddr);
+    
+    int did_find_client = listen(listen_sockfd, 1);
+                          // socket  flags
+
+    // Error if did_find_client < 0 :(
+    if (did_find_client < 0){
+      cerr << "could not find client" << endl;
+      exit(3);
+    } 
+
+    int clientfd = accept(listen_sockfd, (struct sockaddr*) &clientaddr, &clientsize);
+    // Error if clientfd < 0 :(
+    if (clientfd < 0){
+      cerr << "could not accept client" << endl;
+      exit(3);
+    } 
+     
+     /* 6. Inspect data from client */
+    char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+    int client_port = ntohs(clientaddr.sin_port); // Little endian
 
     //define buffer for receiving packets from client
     Packet client_receive_buffer[2000];
@@ -126,10 +150,7 @@ int main(int argc, char *argv[]) {
           client_packet_expected++;
         }
 
-         /* 6. Inspect data from client */
-        char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
-        int client_port = ntohs(clientaddr.sin_port); // Little endian
-
+        
         // TODO: send an ACK back
         Packet pkt;
         char std_in_buffer [MSS];
@@ -157,7 +178,6 @@ int main(int argc, char *argv[]) {
       // If something happened on stdin, then we read the input
         
       // bool std_in_given = false;
-      bool last_packet = false;
       char std_in_buffer [MSS];
       struct Packet pkt;
       ssize_t bytes_read = read(STDIN_FILENO, std_in_buffer, MSS);
@@ -168,7 +188,7 @@ int main(int argc, char *argv[]) {
         send_packets_buff.push_back(pkt);
         bytes_read = read(STDIN_FILENO, std_in_buffer, MSS);
       }
-      send_packets();
+      send_base = send_packets(send_packets_buff, send_base, send_sockfd, (struct sockaddr *)&servaddr);
     } 
 
     /* 8. You're done! Terminate the connection */     
