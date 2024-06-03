@@ -72,15 +72,76 @@ int main(int argc, char *argv[]) {
       exit(3);
     } 
 
-    // repeat for client
+    //define buffer for receiving packets from client
+    Packet client_receive_buffer[2000];
+    bool received[2000] = {false};
+    //define packet expected number
+    u_int32_t client_packet_expected = 1;
+     // repeat for client
     struct sockaddr_in clientaddr;
     clientaddr.sin_family = AF_INET; // use IPv4
     clientaddr.sin_port = htons(CLIENT_PORT_FROM_SERVER); // set receiving port, Big endian
     clientaddr.sin_addr.s_addr = INADDR_ANY; // accept all connections, // same as inet_addr("0.0.0.0") // "Address string to network bytes"
 
+
     Packet dummy_pkt;
     send_packets_buff.push_back(dummy_pkt);
     while(true){
+      /* 4. Create buffer to store incoming data */
+      // READ FROM CLIENT
+      bool client_sent_data = false;
+
+      Packet client_buf;
+      struct sockaddr_in clientaddr; // Same information, but about client
+      socklen_t clientsize = sizeof(clientaddr);
+
+      /* 5. Listen for data from clients */
+      int bytes_recvd = recvfrom(sockfd, &client_buf, MSS, 
+                              // socket  store data  how much
+                                0, (struct sockaddr*) &clientaddr, 
+                                &clientsize);
+
+      // Execution will stop here until `BUF_SIZE` is read or termination/error
+      // bytes received is
+      if (bytes_recvd >= 0) 
+        client_sent_data = true;
+
+      if(client_sent_data){
+        // // casting received data to a packet
+        // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
+        //one packet received at a time
+        //note: client_receive_buffer -- index + 1 should = packet #
+        client_receive_buffer[client_buf.packet_number - 1] = client_buf;
+        received[client_buf.packet_number - 1] = true;
+        //check with expected packet #
+        while (received[client_packet_expected - 1]){
+          Packet pkt = client_receive_buffer[client_packet_expected - 1];
+          printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+          pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
+
+          client_packet_expected++;
+        }
+
+         /* 6. Inspect data from client */
+        char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
+        int client_port = ntohs(clientaddr.sin_port); // Little endian
+
+        // TODO: send an ACK back
+        // add in packet
+        /* 7. Send data back to client */
+        char server_buf[] = "Hello world!";
+        int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+                          // socket  send data   how much to send
+                              0, (struct sockaddr*) &clientaddr, 
+                          // flags   where to send
+                              sizeof(clientaddr));
+        if (did_send < 0) {
+            cerr << "failed to send data from server to client" << endl;
+            exit(3);
+          } 
+          // TODO: send ACK back to client
+      }
+      
       // PART 2: STANDARD IN 
       // If something happened on stdin, then we read the input
         
