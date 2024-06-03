@@ -9,7 +9,10 @@
 #define MSS 1024
 #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
 
-#define CLIENT_PORT_FROM_SERVER 7000
+#define SERVER_SEND_TO_CLIENT_PORT 4000
+#define CLIENT_PORT 6001
+#define SERVER_PORT 6002
+#define CLIENT_PORT_TO 5001
 
 using namespace std;
 
@@ -29,17 +32,18 @@ void create_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ac
     memcpy(&pkt->payload, payload_buff, bytes_read);
 }
 
-int send_packets(vector<Packet> &send_buff, int send_base){
+int send_packets(vector<Packet> send_buff, int send_base, int send_sockfd, const struct sockaddr *servaddr){
     int packets_left_to_send = send_buff.size() - send_base;
     int size = send_buff.size();
     int cwnd_limit = send_base + CWND_SIZE;
     int limit = min(cwnd_limit, size);
 
     for(int send_base = 0; send_base < limit; send_base++){
-        Packet packet_to_send = send_buff.get(send_base);
-        sendto(send_sockfd, packet_to_send, sizeof(packet_to_send), 0, (struct sockaddr *)&server_addr_to, addr_size);
+        Packet packet_to_send = send_buff.at(send_base);
+        sendto(send_sockfd, (void *)& packet_to_send, sizeof(packet_to_send), 0, (struct sockaddr *)&servaddr,  sizeof(servaddr));
     }
     return send_base;
 }
+
 
 #endif
