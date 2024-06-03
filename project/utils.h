@@ -42,4 +42,13 @@ int send_packets(vector<Packet> &send_buff, int send_base){
     return send_base;
 }
 
+void char_array_to_packet(char* buffer, struct Packet* pkt) {
+    memcpy(pkt, buffer, sizeof(struct Packet));
+}
+
+void packet_to_char_array(struct Packet* pkt, char* buffer) {
+    memcpy(buffer, pkt, sizeof(struct Packet));
+}
+
+
 #endif

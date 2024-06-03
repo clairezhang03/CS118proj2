@@ -77,6 +77,7 @@ int main(int argc, char *argv[]) {
     bool received[2000] = {false};
     //define packet expected number
     u_int32_t client_packet_expected = 1;
+
      // repeat for client
     struct sockaddr_in clientaddr;
     clientaddr.sin_family = AF_INET; // use IPv4
@@ -91,7 +92,8 @@ int main(int argc, char *argv[]) {
       // READ FROM CLIENT
       bool client_sent_data = false;
 
-      Packet client_buf;
+      //CHANGE -- unsure about size of buf
+      char client_buf[sizeof(struct Packet)];
       struct sockaddr_in clientaddr; // Same information, but about client
       socklen_t clientsize = sizeof(clientaddr);
 
@@ -107,16 +109,18 @@ int main(int argc, char *argv[]) {
         client_sent_data = true;
 
       if(client_sent_data){
-        // // casting received data to a packet
-        // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
+        // casting received data to a packet
+        Packet client_packet;
+        char_array_to_packet(client_buf, &client_packet);
+
         //one packet received at a time
         //note: client_receive_buffer -- index + 1 should = packet #
-        client_receive_buffer[client_buf.packet_number - 1] = client_buf;
-        received[client_buf.packet_number - 1] = true;
+        client_receive_buffer[client_packet.packet_number - 1] = client_packet;
+        received[client_packet.packet_number - 1] = true;
         //check with expected packet #
         while (received[client_packet_expected - 1]){
           Packet pkt = client_receive_buffer[client_packet_expected - 1];
-          printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+          printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d, payload: %s\n", 
           pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
 
           client_packet_expected++;
@@ -127,10 +131,18 @@ int main(int argc, char *argv[]) {
         int client_port = ntohs(clientaddr.sin_port); // Little endian
 
         // TODO: send an ACK back
-        // add in packet
+        Packet pkt;
+        char std_in_buffer [MSS];
+        //create ack
+        //CHANGE
+        create_packet(&pkt, client_packet_expected, client_receive_buffer[client_packet_expected - 1].packet_number, std_in_buffer, 0);
+        //send ack
         /* 7. Send data back to client */
-        char server_buf[] = "Hello world!";
-        int did_send = sendto(sockfd, server_buf, strlen(server_buf), 
+        //cast packet
+        //CHANGE - unsure of size of buf
+        char server_buf[sizeof(struct Packet)];
+        packet_to_char_array(&pkt, server_buf);
+        int did_send = sendto(sockfd, &pkt, sizeof(server_buf), 
                           // socket  send data   how much to send
                               0, (struct sockaddr*) &clientaddr, 
                           // flags   where to send
@@ -139,7 +151,6 @@ int main(int argc, char *argv[]) {
             cerr << "failed to send data from server to client" << endl;
             exit(3);
           } 
-          // TODO: send ACK back to client
       }
       
       // PART 2: STANDARD IN 
