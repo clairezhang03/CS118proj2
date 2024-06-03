@@ -139,7 +139,8 @@ int main(int argc, char *argv[]) {
     } 
 
     //define buffer for receiving packets from client
-    vector<Packet*> client_receive_buffer;
+    Packet client_receive_buffer[2000];
+    bool received[2000] = {false};
     //define packet expected number
     u_int32_t client_packet_expected = 1;
 
@@ -148,12 +149,12 @@ int main(int argc, char *argv[]) {
       // READ FROM CLIENT
       bool client_sent_data = false;
 
-      char client_buf[MSS];
+      Packet client_buf;
       struct sockaddr_in clientaddr; // Same information, but about client
       socklen_t clientsize = sizeof(clientaddr);
 
       /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(sockfd, client_buf, MSS, 
+      int bytes_recvd = recvfrom(sockfd, &client_buf, MSS, 
                               // socket  store data  how much
                                 0, (struct sockaddr*) &clientaddr, 
                                 &clientsize);
@@ -164,22 +165,20 @@ int main(int argc, char *argv[]) {
         client_sent_data = true;
 
       if(client_sent_data){
-        // casting received data to a packet
-        Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
+        // // casting received data to a packet
+        // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
         //one packet received at a time
-        client_receive_buffer.push_back(client_packet);
-
-        //check if it's in order
         //note: client_receive_buffer -- index + 1 should = packet #
-        u_int32_t client_packet_temp = client_packet->packet_number;
+        client_receive_buffer[client_buf.packet_number - 1] = client_buf;
+        received[client_buf.packet_number - 1] = true;
         //check with expected packet #
-        if (client_packet_temp != client_packet_expected){
-          //TODO: Error protocol?
-        }
-        client_packet_expected++;
+        while (received[client_packet_expected - 1]){
+          Packet pkt = client_receive_buffer[client_packet_expected - 1];
+          printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+          pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
 
-        // TODO: reorder the packets and write out message
-        cout << "Message: " << &client_buf << endl;
+          client_packet_expected++;
+        }
 
          /* 6. Inspect data from client */
         char* client_ip = inet_ntoa(clientaddr.sin_addr); // "Network bytes to address string"
