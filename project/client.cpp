@@ -14,7 +14,7 @@ using namespace std;
 int seq_num = 1;
 int ack_num = 1;
 vector<Packet> send_packets_buff;
-int send_base = 0;
+int send_base = 1;
 
 int main(int argc, char *argv[]) {
     // does not have proper formatting for error
@@ -66,9 +66,12 @@ int main(int argc, char *argv[]) {
     
     // Error if did_bind < 0 :(
     if (did_bind < 0){
-      cerr << "Client: listening socket failed to bind" << endl;
+      cerr << "Client: socket failed to bind" << endl;
       exit(3);
     } 
+
+    //================================================//
+    //================================================//
 
     //define buffer for receiving packets from client
     Packet client_receive_buffer[2000];
@@ -76,23 +79,22 @@ int main(int argc, char *argv[]) {
     //define packet expected number
     u_int32_t client_packet_expected = 1;
 
+    // Place a dummy packet so sequence number does not start with 0
     Packet dummy_pkt;
     send_packets_buff.push_back(dummy_pkt);
     while(true){
       /* 4. Create buffer to store incoming data */
       // READ FROM CLIENT
-      // Packet client_buf;
-      char client_buf[1024];
-
+      Packet client_buf;
       /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(client_sockfd, &client_buf, MSS, 0, (struct sockaddr*) &serv_addr, &server_size);
-      
-      // change to if???
-      if (bytes_recvd > 0){
-        
-        client_buf[bytes_recvd] = '\0';
-        cout << "Received from server: " << client_buf << endl;
-        bytes_recvd = 0;
+      int bytes_recvd = recvfrom(client_sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*) &serv_addr, &server_size);
+      if (bytes_recvd > 0) {
+          cout << "Received from server: ";
+          cout.flush(); 
+          write(STDOUT_FILENO, client_buf.payload, client_buf.payload_size);
+          cout << endl;
+          bytes_recvd = 0;
+      }
       
         // // casting received data to a packet
         // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
@@ -122,28 +124,37 @@ int main(int argc, char *argv[]) {
           //     exit(3);
           //   } 
             // TODO: send ACK back to client
-        }
-       
       
+       
+      //================================================//
+      //================================================//
       // PART 2: STANDARD IN 
-      // If something happened on stdin, then we read the input
-      // bool std_in_given = false;
       char std_in_buffer [MSS];
-      struct Packet pkt;
-      ssize_t bytes_read = read(STDIN_FILENO, std_in_buffer, MSS);
-      if(bytes_read > 0){
-        sendto(client_sockfd, &std_in_buffer, sizeof(std_in_buffer), 0, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-        bytes_read = 0;
+      struct Packet send_pkt;
+      ssize_t bytes_read;
+      while((bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
+        create_packet(&send_pkt, seq_num++, ack_num++, (const char*) std_in_buffer, bytes_read);
+        send_packets_buff.push_back(send_pkt);
       }
 
-    //   while(bytes_read > 0){
-    //     create_packet(&pkt, seq_num++, ack_num++, (const char*) std_in_buffer, bytes_read);
-    //     // printf("Packet %d: Packet Number = %u, Payload Size = %u, Payload = %s...\n",
-    //     //         seq_num, pkt.packet_number, pkt.payload_size, pkt.payload);
-    //     send_packets_buff.push_back(pkt);
-    //     bytes_read = read(STDIN_FILENO, std_in_buffer, MSS);
-    //   }
-    //   send_base = send_packets(send_packets_buff, send_base, send_sockfd, (struct sockaddr *)&serv_addr);
+      // send packets
+      /*
+      Example: 0 1 2 3 4 5
+      - size = 6
+      - send_base = 2
+      - 4 packets left to send: 2, 3, 4, 5
+      - cwnd_limit_upper_bound = 2 + 20 = 22 --> sends [2, 22) = 20
+      */
+
+      int buffer_size = send_packets_buff.size(); 
+      int cwnd_upper_bound = send_base + CWND_SIZE;
+      int limit = min(cwnd_upper_bound, buffer_size);
+      
+      for(; send_base < limit; send_base++){
+          Packet packet_to_send = send_packets_buff.at(send_base);
+          // print_packet(&packet_to_send);
+          sendto(client_sockfd, &send_packets_buff.at(send_base), sizeof(packet_to_send), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+      }
     } 
 
     /* 8. You're done! Terminate the connection */     

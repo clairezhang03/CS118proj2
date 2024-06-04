@@ -14,7 +14,7 @@ using namespace std;
 int seq_num = 1;
 int ack_num = 1;
 vector<Packet> send_packets_buff;
-int send_base = 0;
+int send_base = 1;
 
 int main(int argc, char *argv[]) {
     // does not have proper formatting for error
@@ -65,16 +65,20 @@ int main(int argc, char *argv[]) {
     memset(&client_addr, 0, sizeof(client_addr));
     socklen_t client_size = sizeof(client_addr);
 
-    char client_buf[1024];
-
-    // dont' move on until connection has been made
+    // don't move on until server gets a connection from client
+    Packet client_buf;
     int bytes_recvd = -1;
     while(bytes_recvd < 0)
-      bytes_recvd = recvfrom(serv_sockfd, &client_buf, MSS, 0, (struct sockaddr*) &client_addr, &client_size);
+      bytes_recvd = recvfrom(serv_sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*) &client_addr, &client_size);
 
-    client_buf[bytes_recvd] = '\0';
-    cout << "Received from client: " << client_buf << endl;
+    cout << "Received from client: ";
+    cout.flush(); 
+    write(STDOUT_FILENO, client_buf.payload, client_buf.payload_size);
+    cout << endl;
     bytes_recvd = 0;
+
+    //================================================//
+    //================================================//
 
     //define buffer for receiving packets from client
     Packet client_receive_buffer[2000];
@@ -82,6 +86,7 @@ int main(int argc, char *argv[]) {
     //define packet expected number
     u_int32_t client_packet_expected = 1;
 
+    // for sending packets
     Packet dummy_pkt;
     send_packets_buff.push_back(dummy_pkt);
     while(true){
@@ -89,14 +94,13 @@ int main(int argc, char *argv[]) {
       // // READ FROM CLIENT
       // bool client_sent_data = false;
 
-      // Packet client_buf;
-      char client_buf[1024];
-
       /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(serv_sockfd, &client_buf, MSS, 0, (struct sockaddr*) &client_addr, &client_size);
+      int bytes_recvd = recvfrom(serv_sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*) &client_addr, &client_size);
       if (bytes_recvd > 0) {
-          client_buf[bytes_recvd] = '\0';
-          cout << "Received from client: " << client_buf << endl;
+          cout << "Received from client: ";
+          cout.flush(); 
+          write(STDOUT_FILENO, client_buf.payload, client_buf.payload_size);
+          cout << endl;
           bytes_recvd = 0;
       }
 
@@ -138,27 +142,35 @@ int main(int argc, char *argv[]) {
       //     // TODO: send ACK back to client
       // }
       
+      //================================================//
+      //================================================//
       // PART 2: STANDARD IN 
-      // If something happened on stdin, then we read the input
-        
-      // bool std_in_given = false;
       char std_in_buffer [MSS];
-      struct Packet pkt;
-      ssize_t bytes_read = read(STDIN_FILENO, std_in_buffer, MSS);
-      if(bytes_read > 0){
-        cout << "Server sending: " << endl;
-        sendto(serv_sockfd, &std_in_buffer, sizeof(std_in_buffer), 0, (struct sockaddr *)&client_addr,  sizeof(client_addr));
-        bytes_read = 0;
+      struct Packet send_pkt;
+      ssize_t bytes_read;
+      while((bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
+        create_packet(&send_pkt, seq_num++, ack_num++, (const char*) std_in_buffer, bytes_read);
+        send_packets_buff.push_back(send_pkt);
       }
 
-      // while(bytes_read > 0){
-      //   create_packet(&pkt, seq_num++, ack_num++, (const char*) std_in_buffer, bytes_read);
-      //   // printf("Packet %d: Packet Number = %u, Payload Size = %u, Payload = %s...\n",
-      //   //         seq_num, pkt.packet_number, pkt.payload_size, pkt.payload);
-      //   send_packets_buff.push_back(pkt);
-      //   bytes_read = read(STDIN_FILENO, std_in_buffer, MSS);
-      // }
-      // send_base = send_packets(send_packets_buff, send_base, send_sockfd, (struct sockaddr *)&serv_addr);
+      // send packets
+      /*
+      Example: 0 1 2 3 4 5
+      - size = 6
+      - send_base = 2
+      - 4 packets left to send: 2, 3, 4, 5
+      - cwnd_limit_upper_bound = 2 + 20 = 22 --> sends [2, 22) = 20
+      */
+
+      int buffer_size = send_packets_buff.size(); 
+      int cwnd_upper_bound = send_base + CWND_SIZE;
+      int limit = min(cwnd_upper_bound, buffer_size);
+      
+      for(; send_base < limit; send_base++){
+          Packet packet_to_send = send_packets_buff.at(send_base);
+          // print_packet(&packet_to_send);
+          sendto(serv_sockfd, &send_packets_buff.at(send_base), sizeof(packet_to_send), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+      }
     } 
 
     /* 8. You're done! Terminate the connection */     

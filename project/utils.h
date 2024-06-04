@@ -24,6 +24,18 @@ struct Packet {
     char payload[MSS]; // Maximum segment size
 };
 
+void print_packet(struct Packet* pkt){
+    cout << "Packet Number: " << pkt->packet_number << endl;
+    cout << "Ack Number: " << pkt->ack_number << endl;
+    cout << "Payload Size: " << pkt->payload_size << endl;
+    cout << "Padding: " << pkt->padding << endl;
+    cout << "Payload: " ;
+    cout.flush();
+    write(STDOUT_FILENO, pkt->payload, pkt->payload_size);
+    cout << endl;
+    cout << endl;
+}
+
 void create_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ack_num, const char* payload_buff, unsigned int bytes_read){
     pkt->packet_number = seq_num;
     pkt->ack_number = ack_num; // This can be set to some relevant value
@@ -33,14 +45,22 @@ void create_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ac
 }
 
 int send_packets(vector<Packet> send_buff, int send_base, int send_sockfd, const struct sockaddr *servaddr){
-    int packets_left_to_send = send_buff.size() - send_base;
-    int size = send_buff.size();
-    int cwnd_limit = send_base + CWND_SIZE;
-    int limit = min(cwnd_limit, size);
-
-    for(int send_base = 0; send_base < limit; send_base++){
+     /*
+     Example: 0 1 2 3 4 5
+     - size = 6
+     - send_base = 2
+     - 4 packets left to send: 2, 3, 4, 5
+     - cwnd_limit_upper_bound = 2 + 20 = 22 --> sends [2, 22) = 20
+     */
+    int packets_left_to_send = send_buff.size() - send_base; 
+    int cwnd_upper_bound = send_base + CWND_SIZE;
+    int limit = min(cwnd_upper_bound, packets_left_to_send + 1);
+    
+    for(; send_base < limit; send_base++){
+        cout << "here" << endl;
         Packet packet_to_send = send_buff.at(send_base);
-        sendto(send_sockfd, (void *)& packet_to_send, sizeof(packet_to_send), 0, (struct sockaddr *)&servaddr,  sizeof(servaddr));
+        cout << "did not pass " << endl;
+        sendto(send_sockfd, &packet_to_send, sizeof(packet_to_send), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
     }
     return send_base;
 }
