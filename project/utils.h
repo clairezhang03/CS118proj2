@@ -9,10 +9,10 @@
 #define MSS 1024
 #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
 
-#define SERVER_SEND_TO_CLIENT_PORT 4000
-#define CLIENT_PORT 6001
-#define SERVER_PORT 6002
-#define CLIENT_PORT_TO 5001
+#define CLIENT_PORT 6002
+#define CLIENT_LISTENING_PORT 5001
+#define LOCAL_HOST "127.0.0.1"
+
 
 using namespace std;
 
