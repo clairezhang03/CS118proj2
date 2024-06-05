@@ -59,13 +59,6 @@ int main(int argc, char *argv[]) {
         exit(3);
     }
 
-
-
-    
-  const char* hostname = argv[2];
-  if (strcmp(hostname, "localhost") == 0) 
-      hostname = LOCAL_HOST;
-
     // if(hostname == "localhost")
     //   hostname = LOCAL_HOST;
     // const char* ca_public_key_file = argv[4]; // change back!!
@@ -89,6 +82,10 @@ int main(int argc, char *argv[]) {
     fcntl(STDIN_FILENO, F_SETFL, flags_stdin);
 
 
+    const char* hostname = argv[2];
+    if (strcmp(hostname, "localhost") == 0) 
+      hostname = LOCAL_HOST;
+
     // 2. Construct server address
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -99,7 +96,7 @@ int main(int argc, char *argv[]) {
 
     struct sockaddr_in client_addr;
     client_addr.sin_family = AF_INET; 
-    client_addr.sin_port = htons(CLIENT_PORT); // 69 nice
+    // client_addr.sin_port = htons(CLIENT_PORT); // 69 nice
     client_addr.sin_addr.s_addr = INADDR_ANY; 
    
     // 3. Bind socket to a port 
