@@ -13,10 +13,9 @@
 #include <time.h>
 
 using namespace std;
-int seq_num = 1;
-int ack_num = 0;
+u_int32_t seq_num = 1;
+u_int32_t ack_num = 0;
 vector<Packet> send_packets_buff;
-vector<bool> acked_packets;
 int received_cum_ack = 0;
 int highest_sent_packet = 0;
 int send_base = 1;
@@ -93,30 +92,45 @@ int main(int argc, char *argv[]) {
     Packet received_pkt, send_pkt, dummy_pkt;
     send_packets_buff.push_back(dummy_pkt); // dummy packet to match sequence number
 
-    int bytes_recvd = -1;
-    while(bytes_recvd < 0)
-      bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
-
-    // Received packet must be data, not an ACK
-    cout << "Received from client: ";
-    cout.flush(); 
-    write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
-    cout << endl;
-    bytes_recvd = 0;
-
-    // Create and send ACK packet, don't start timer for ACK
-    ack_num = received_pkt.packet_number;
-    create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
-    sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
-    //================================================//
-    //================================================//
-
     //define buffer for receiving packets from client
     Packet receive_buffer[2000];
     bool received[2000] = {false};
 
     //define packet expected number
     u_int32_t client_packet_expected = 1;
+
+    int bytes_recvd = -1;
+    while(bytes_recvd < 0)
+      bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
+
+    // Received packet must be data, not an ACK
+    // cout << "Received from client: ";
+    // cout.flush(); 
+    // write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
+    // cout << endl;
+    // bytes_recvd = 0;
+    receive_buffer[received_pkt.packet_number - 1] = received_pkt;
+    received[received_pkt.packet_number - 1] = true;
+    //check with expected packet #
+    while (received[client_packet_expected - 1]){
+      Packet pkt = receive_buffer[client_packet_expected - 1];
+      // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+      // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
+      cout << "Received from Client: ";
+      cout.flush(); 
+      write(STDOUT_FILENO, pkt.payload, pkt.payload_size);
+      cout << endl;
+
+      client_packet_expected++;
+    }
+
+    // Create and send ACK packet, don't start timer for ACK
+    ack_num = client_packet_expected - 1;
+    create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
+    sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+    //================================================//
+    //================================================//
+
 
     while(true){
       // 1. Check if timer expired --> retransmit
@@ -137,13 +151,30 @@ int main(int argc, char *argv[]) {
 
         //Case 1: Received packet is data
         if(received_pack_num != 0){
-          cout << "Received from Client: ";
-          cout.flush(); 
-          write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
-          cout << endl;
+          // cout << "Received from Client: ";
+          // cout.flush(); 
+          // write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
+          // cout << endl;
+
+          //one packet received at a time
+          //note: client_receive_buffer -- index + 1 should = packet #
+          receive_buffer[received_pack_num - 1] = received_pkt;
+          received[received_pack_num - 1] = true;
+          //check with expected packet #
+          while (received[client_packet_expected - 1]){
+            Packet pkt = receive_buffer[client_packet_expected - 1];
+            // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+            // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
+            cout << "Received from Client: ";
+            cout.flush(); 
+            write(STDOUT_FILENO, pkt.payload, pkt.payload_size);
+            cout << endl;
+
+            client_packet_expected++;
+          }
 
           // Create and send ACK packet
-          ack_num = received_pack_num; // TODO: CHANGE THIS TO CORRECT ACK NUM
+          ack_num = client_packet_expected - 1; // TODO: CHANGE THIS TO CORRECT ACK NUM
           create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
           sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
         }

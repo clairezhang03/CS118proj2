@@ -12,10 +12,9 @@
 #include <time.h>
 
 using namespace std;
-int seq_num = 1;
-int ack_num = 0;
+u_int32_t seq_num = 1;
+u_int32_t ack_num = 0;
 vector<Packet> send_packets_buff;
-vector<bool> acked_packets;
 int send_base = 1;
 int received_cum_ack = 0;
 bool cwnd_full = false;
@@ -125,13 +124,30 @@ int main(int argc, char *argv[]) {
 
         //Case 1: Received packet is data
         if(received_pack_num != 0){
-          cout << "Received from Server: ";
-          cout.flush(); 
-          write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
-          cout << endl;
+          // cout << "Received from Server: ";
+          // cout.flush(); 
+          // write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
+          // cout << endl;
+
+          //one packet received at a time
+          //note: client_receive_buffer -- index + 1 should = packet #
+          client_receive_buffer[received_pack_num - 1] = received_pkt;
+          received[received_pack_num - 1] = true;
+          //check with expected packet #
+          while (received[client_packet_expected - 1]){
+            Packet pkt = client_receive_buffer[client_packet_expected - 1];
+            // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+            // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
+            cout << "Received from Server: ";
+            cout.flush(); 
+            write(STDOUT_FILENO, pkt.payload, pkt.payload_size);
+            cout << endl;
+
+            client_packet_expected++;
+          }
 
           // Create and send ACK packet
-          ack_num = received_pack_num; // TODO: CHANGE THIS TO CORRECT ACK NUM
+          ack_num = client_packet_expected - 1; // TODO: CHANGE THIS TO CORRECT ACK NUM
           create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
           sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         }
@@ -194,10 +210,21 @@ int main(int argc, char *argv[]) {
       //================================================//
       //================================================//
       // PART 2: STANDARD IN 
+      int temp = 0;
       char std_in_buffer [MSS];
       ssize_t bytes_read;
       while(!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
-        create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
+        if (temp == 1){
+          create_packet(&send_pkt, 3, 0, (const char*) std_in_buffer, bytes_read);
+        }
+        else{
+          create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
+          if (temp == 2){
+            seq_num++;
+          }
+        }
+        temp++;
+        // create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
         send_packets_buff.push_back(send_pkt); // store in case of retransmission
         sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         start_timer();
