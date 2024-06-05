@@ -115,29 +115,26 @@ int main(int argc, char *argv[]) {
     
     first_packet = true;
     // Received packet must be data, not an ACK
-    // DON'T THINK WE NEED IF CONIDTION --> SHOULD ALWAYS BE DATA, CAN'T BE PURE ACK??, KEEP IN CASE
     uint32_t received_pkt_number = ntohl(received_pkt.packet_number);
     if (received_pkt_number != 0) {
       receive_buffer[received_pkt_number] = received_pkt;
       received[received_pkt_number] = true;
-      //check with expected packet #
-    while (received[client_packet_expected]){
-      Packet pkt = receive_buffer[client_packet_expected];
-      // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
-      // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
-      // cout << "Received from Client: ";
-      // cout.flush(); 
-      write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
-      // cout << endl;
-      client_packet_expected++;
-    }
+    
+      while (received[client_packet_expected]){
+        Packet pkt = receive_buffer[client_packet_expected];
+        // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+        // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
+        // cout << "Received from Client: ";
+        // cout.flush(); 
+        write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
+        client_packet_expected++;
+      }
 
       // Create and send ACK packet, don't start timer for ACK
-    ack_num = client_packet_expected - 1;
+      ack_num = client_packet_expected - 1;
     }
     else {
       // cout << "Received ACK from Client: " << received_pkt.ack_number << endl;
-
       // 1. reset timer
       start_timer();
       received_cum_ack = ntohl(received_pkt.ack_number);
@@ -153,17 +150,15 @@ int main(int argc, char *argv[]) {
     //================================================//
     //================================================//
 
-
     while(true){
       // 1. Check if timer expired --> retransmit
       if(timer_on && timer_expired()){
-        // cout << "timer expired" << endl;
+        // cout << "Timer expired" << endl;
         // Retransmit lowest unACK'd packet to be sent
         Packet lowest_unACK_pkt = send_packets_buff.at(received_cum_ack + 1);
-        // cout << "resending: " << lowest_unACK_pkt.packet_number << endl;
+        // cout << "Resending: " << lowest_unACK_pkt.packet_number << endl;
         sendto(serv_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
         start_timer();
-        // continue;
       }
 
       // 2. Listen for data from clients
@@ -188,14 +183,11 @@ int main(int argc, char *argv[]) {
               // cout.flush(); 
               write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
               // cout << endl;
-
               client_packet_expected++;
             }
 
             // Create and send ACK packet
-            ack_num = client_packet_expected - 1; // TODO: CHANGE THIS TO CORRECT ACK NUM
-            // create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
-            // sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+            ack_num = client_packet_expected - 1;
           }
 
           if (received_pack_ack != 0) { // Case 2: Received packet is an ACK
@@ -228,7 +220,7 @@ int main(int argc, char *argv[]) {
         sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
         start_timer();
 
-        // cout << "sending: " << send_pkt.payload << endl;
+        // cout << "Sending: " << send_pkt.payload << endl;
         // Check if congestion window is full now: seq_num now represents the next packet that needs to be sent
         // Transmission window: [smallest unACK'd packet, smallest unACK'd packet + 20)
         if(seq_num > received_cum_ack + CWND_SIZE){ // next seq num > last packet in cwnd 

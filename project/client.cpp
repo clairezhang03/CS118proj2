@@ -15,7 +15,6 @@ using namespace std;
 uint32_t seq_num = 1;
 uint32_t ack_num = 0;
 vector<Packet> send_packets_buff;
-int send_base = 1;
 int received_cum_ack = 0;
 bool cwnd_full = false;
 
@@ -50,7 +49,6 @@ int main(int argc, char *argv[]) {
     try {
         flag = stoi(argv[1]);
         server_listening_port = stoi(argv[3]);
-        // client_port = stoi(argv[4]);
     } catch (const invalid_argument& e) {
         cerr << "Invalid argument for flag or port. Please provide valid integers." << endl;
         exit(3);
@@ -59,11 +57,10 @@ int main(int argc, char *argv[]) {
         exit(3);
     }
 
-    // if(hostname == "localhost")
-    //   hostname = LOCAL_HOST;
-    // const char* ca_public_key_file = argv[4]; // change back!!
+    const char* hostname = argv[2];
+    if (strcmp(hostname, "localhost") == 0) 
+      hostname = LOCAL_HOST;
 
-   
     // 1. Create socket 
     int client_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (client_sockfd < 0) {
@@ -81,11 +78,6 @@ int main(int argc, char *argv[]) {
     flags_stdin |= O_NONBLOCK;
     fcntl(STDIN_FILENO, F_SETFL, flags_stdin);
 
-
-    const char* hostname = argv[2];
-    if (strcmp(hostname, "localhost") == 0) 
-      hostname = LOCAL_HOST;
-
     // 2. Construct server address
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -96,7 +88,6 @@ int main(int argc, char *argv[]) {
 
     struct sockaddr_in client_addr;
     client_addr.sin_family = AF_INET; 
-    // client_addr.sin_port = htons(CLIENT_PORT); // 69 nice
     client_addr.sin_addr.s_addr = INADDR_ANY; 
    
     // 3. Bind socket to a port 
@@ -132,7 +123,6 @@ int main(int argc, char *argv[]) {
         // cout << "resending: " << lowest_unACK_pkt.packet_number << endl;
         sendto(client_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         start_timer();
-        // continue;
       }
 
       // 2. Listen for data from clients
@@ -167,9 +157,7 @@ int main(int argc, char *argv[]) {
           }
 
           // Create and send ACK packet
-          ack_num = client_packet_expected - 1; // TODO: CHANGE THIS TO CORRECT ACK NUM
-          // create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
-          // sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+          ack_num = client_packet_expected - 1;
         }
 
         if (received_pack_ack != 0){ // Case 2: Received packet is an ACK
@@ -197,24 +185,13 @@ int main(int argc, char *argv[]) {
       char std_in_buffer [MSS];
       ssize_t bytes_read;
       if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS)) > 0) {
-      //   if (temp == 1){
-          // create_packet(&send_pkt, 3, 0, (const char*) std_in_buffer, bytes_read);
-      //   }
-      //   else{
-      //     create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
-      //     if (temp == 2){
-      //       seq_num++;
-      //     }
-      //   }
-      //   temp++;
 
         create_packet(&send_pkt, seq_num++, ack_num, (const char*) std_in_buffer, bytes_read);
         send_packets_buff.push_back(send_pkt); // store in case of retransmission
         sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         start_timer();
-        // cout << "sus" << endl;
-
         //cout << "sending: " << send_pkt.payload << endl;
+        
         // Check if congestion window is full now: seq_num now represents the next packet that needs to be sent
         // Transmission window: [smallest unACK'd packet, smallest unACK'd packet + 20)
         if(seq_num > received_cum_ack + CWND_SIZE){ // next seq num > last packet in cwnd 
