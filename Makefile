@@ -9,10 +9,23 @@ clean:
 
 # NOTE: Make sure you have your project files in the ./project directory
 
+# NOTE: Make sure you have your project files in the ./project directory
 # Will run the autograder and place the results in ./results/results.json
 run:
-	docker run --rm -v ./project:/autograder/submission -v ./results:/autograder/results eado0/security-is-key /autograder/run_autograder && cat results/results.json
+	docker pull eado0/reliability-is-essential
+	docker run --rm \
+		-v ./project:/autograder/submission/project \
+		-v ./results:/autograder/results \
+		eado0/reliability-is-essential \
+		/autograder/run_autograder && cat results/results.json
 
 # In case you want to run the autograder manually, use interactive
 interactive:
-	docker run --rm -it -v ./project:/autograder/submission -v ./results:/autograder/results eado0/security-is-key bash
+	docker pull eado0/reliability-is-essential
+	(docker ps | grep reliability-is-essential && \
+	docker exec -it reliability-is-essential bash) || \
+	(docker pull eado0/reliability-is-essential; \
+	docker run --rm --name reliability-is-essential -it \
+		-v ./project:/autograder/submission/project \
+		-v ./results:/autograder/results \
+		eado0/reliability-is-essential bash)

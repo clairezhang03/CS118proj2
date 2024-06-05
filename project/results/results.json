@@ -1,0 +1,17 @@
+{
+    "tests": [
+        {
+            "status": "failed",
+            "name": "Compilation",
+            "output": "Compilation Error: make: *** No targets specified and no makefile found.  Stop.\n",
+            "visibility": "visible"
+        },
+        {
+            "name": "Total points: 0/100",
+            "status": "passed",
+            "visibility": "visible"
+        }
+    ],
+    "score": 0,
+    "visibility": "visible"
+}

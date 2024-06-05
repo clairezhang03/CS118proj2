@@ -5,8 +5,8 @@
 #include <string.h>
 #include <vector>
 
-#define CWND_SIZE 3
-#define MSS 5
+#define CWND_SIZE 20
+#define MSS 1024
 #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
 
 #define CLIENT_PORT 6002
