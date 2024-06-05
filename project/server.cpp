@@ -92,7 +92,6 @@ int main(int argc, char *argv[]) {
     // don't move on until server gets a connection from client
     Packet received_pkt, send_pkt, dummy_pkt;
     send_packets_buff.push_back(dummy_pkt); // dummy packet to match sequence number
-    acked_packets.push_back(true);
 
     int bytes_recvd = -1;
     while(bytes_recvd < 0)
@@ -138,14 +137,13 @@ int main(int argc, char *argv[]) {
 
         //Case 1: Received packet is data
         if(received_pack_num != 0){
-          cout << "Received from client: ";
+          cout << "Received from Client: ";
           cout.flush(); 
           write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
           cout << endl;
-          bytes_recvd = 0;
 
           // Create and send ACK packet
-          ack_num = received_pkt.packet_number; // TODO: CHANGE THIS TO CORRECT ACK NUM
+          ack_num = received_pack_num; // TODO: CHANGE THIS TO CORRECT ACK NUM
           create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
           sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
         }
@@ -208,21 +206,21 @@ int main(int argc, char *argv[]) {
       //================================================//
       //================================================//
       // PART 2: STANDARD IN 
-      char std_in_buffer [MSS];;
+      char std_in_buffer [MSS];
       ssize_t bytes_read;
       while(!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
         create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
         send_packets_buff.push_back(send_pkt); // store in case of retransmission
         sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
         start_timer();
-        
-        cout << "sending: " << send_pkt.payload << endl;
+
+        // cout << "sending: " << send_pkt.payload << endl;
         // Check if congestion window is full now: seq_num now represents the next packet that needs to be sent
         // Transmission window: [smallest unACK'd packet, smallest unACK'd packet + 20)
         if(seq_num > received_cum_ack + CWND_SIZE){ // next seq num > last packet in cwnd 
-          cout << "=================" << endl;
-          cout << "cwnd is full now" << endl;
-          cout << "next avalable seq num = " << seq_num << ", upper packet bound = " << received_cum_ack + CWND_SIZE << endl;
+          // cout << "=================" << endl;
+          // cout << "cwnd is full now" << endl;
+          // cout << "next avalable seq num = " << seq_num << ", upper packet bound = " << received_cum_ack + CWND_SIZE << endl;
           cwnd_full = true;  
         }
       } 
@@ -230,6 +228,4 @@ int main(int argc, char *argv[]) {
     /* 8. You're done! Terminate the connection */     
     close(serv_sockfd);
     return 0; 
-
-
 }

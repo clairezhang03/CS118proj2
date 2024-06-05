@@ -44,27 +44,6 @@ void create_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ac
     memcpy(&pkt->payload, payload_buff, bytes_read);
 }
 
-int send_packets(vector<Packet> send_buff, int send_base, int send_sockfd, const struct sockaddr *servaddr){
-     /*
-     Example: 0 1 2 3 4 5
-     - size = 6
-     - send_base = 2
-     - 4 packets left to send: 2, 3, 4, 5
-     - cwnd_limit_upper_bound = 2 + 20 = 22 --> sends [2, 22) = 20
-     */
-    int packets_left_to_send = send_buff.size() - send_base; 
-    int cwnd_upper_bound = send_base + CWND_SIZE;
-    int limit = min(cwnd_upper_bound, packets_left_to_send + 1);
-    
-    for(; send_base < limit; send_base++){
-        cout << "here" << endl;
-        Packet packet_to_send = send_buff.at(send_base);
-        cout << "did not pass " << endl;
-        sendto(send_sockfd, &packet_to_send, sizeof(packet_to_send), 0, (struct sockaddr *)&servaddr, sizeof(servaddr));
-    }
-    return send_base;
-}
-
 void char_array_to_packet(char* buffer, struct Packet* pkt) {
     memcpy(pkt, buffer, sizeof(struct Packet));
 }

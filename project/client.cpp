@@ -17,6 +17,26 @@ int ack_num = 0;
 vector<Packet> send_packets_buff;
 vector<bool> acked_packets;
 int send_base = 1;
+int received_cum_ack = 0;
+bool cwnd_full = false;
+
+// Global variables for the timer
+time_t start_time;
+double timeout_seconds = RTO;  // Set the timeout duration to 5 seconds
+bool timer_on = false;
+
+// Function to start the timer
+void start_timer() {
+    start_time = time(NULL);  // Record the current time
+    timer_on = true;
+}
+
+// Function to check if the timer has expired
+int timer_expired() {
+    time_t current_time = time(NULL);
+    double elapsed_seconds = difftime(current_time, start_time);
+    return elapsed_seconds >= timeout_seconds;
+}
 
 int main(int argc, char *argv[]) {
     // does not have proper formatting for error
@@ -75,7 +95,6 @@ int main(int argc, char *argv[]) {
      // don't move on until server gets a connection from client
     Packet received_pkt, send_pkt, dummy_pkt;
     send_packets_buff.push_back(dummy_pkt); // dummy packet to match sequence number
-    acked_packets.push_back(true);
 
     //================================================//
     //================================================//
@@ -83,113 +102,117 @@ int main(int argc, char *argv[]) {
     //define buffer for receiving packets from client
     Packet client_receive_buffer[2000];
     bool received[2000] = {false};
+
     //define packet expected number
     u_int32_t client_packet_expected = 1;
 
-    while(true){
-      // reset bytes_recvd = 0??
-      /* 5. Listen for data from clients */
+        while(true){
+      // 1. Check if timer expired --> retransmit
+      if(timer_on && timer_expired()){
+        cout << "timer expired" << endl;
+        // Retransmit lowest unACK'd packet to be sent
+        Packet lowest_unACK_pkt = send_packets_buff.at(received_cum_ack + 1);
+        cout << "resending: " << lowest_unACK_pkt.packet_number << endl;
+        sendto(client_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+        start_timer();
+        // continue;
+      }
+
+      // 2. Listen for data from clients
       int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
       if (bytes_recvd > 0) {
         int received_pack_num = received_pkt.packet_number;
 
         //Case 1: Received packet is data
         if(received_pack_num != 0){
-          // TODO: Update ACK num
-          ack_num = received_pack_num; // CHANGE
           cout << "Received from Server: ";
           cout.flush(); 
           write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
           cout << endl;
-          
+
           // Create and send ACK packet
+          ack_num = received_pack_num; // TODO: CHANGE THIS TO CORRECT ACK NUM
           create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
-          // Start the timer
-          time_t start_time = time(NULL);
-
-          // Wait for 5 seconds
-          // while (difftime(time(NULL), start_time) < 1) {
-          //     // You can do other tasks here if needed, or simply sleep
-          //     usleep(100000);  // sleep for 0.1 seconds to reduce CPU usage
-          // }
-
           sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         }
 
         else{ // Case 2: Received packet is an ACK
-          int received_ack_num = received_pkt.ack_number;
-          cout << "Received ACK from server: " << received_ack_num << endl;
+          cout << "Received ACK from Server: " << received_pkt.ack_number << endl;
 
-          // TODO: set ACK num correctly
-          ack_num = received_pack_num + 1;
+          // 1. reset timer
+          start_timer();
+          received_cum_ack = received_pkt.ack_number;
 
-         
+          // 2. Update cwnd bounds if necessary
+          if(seq_num <= received_cum_ack + CWND_SIZE) // next available seq num <= last packet in upper bound
+            cwnd_full = false;
+
+          // 3. cancel timer if all packets were received
+          if(received_cum_ack == send_packets_buff.size() - 1)
+            timer_on = false;
         }
       }
 
-      
-      
-        // // casting received data to a packet
-        // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
-        //one packet received at a time
-        //note: client_receive_buffer -- index + 1 should = packet #
-        // client_receive_buffer[client_buf.packet_number - 1] = client_buf;
-        // received[client_buf.packet_number - 1] = true;
-        //check with expected packet #
-        // while (received[client_packet_expected - 1]){
-        //   Packet pkt = client_receive_buffer[client_packet_expected - 1];
-        //   printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
-        //   pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
+      // // Execution will stop here until `BUF_SIZE` is read or termination/error
+      // // bytes received is
+      // if (bytes_recvd >= 0) 
+      //   client_sent_data = true;
 
-        //   client_packet_expected++;
+      // if(client_sent_data){
+      //   // // casting received data to a packet
+      //   // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
+      //   //one packet received at a time
+      //   //note: client_receive_buffer -- index + 1 should = packet #
+      //   client_receive_buffer[client_buf.packet_number - 1] = client_buf;
+      //   received[client_buf.packet_number - 1] = true;
+      //   //check with expected packet #
+      //   while (received[client_packet_expected - 1]){
+      //     Packet pkt = client_receive_buffer[client_packet_expected - 1];
+      //     printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
+      //     pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
 
-           // TODO: send an ACK back
-          // add in packet
-          /* 7. Send data back to client */
-          // char server_buf[] = "Hello world!";
-          // int did_send = sendto(send_sockfd, server_buf, strlen(server_buf), 
-          //                   // socket  send data   how much to send
-          //                       0, (struct sockaddr*) &client_addr, 
-          //                   // flags   where to send
-          //                       &sizeof(client_addr));
-          // if (did_send < 0) {
-          //     cerr << "failed to send data from server to client" << endl;
-          //     exit(3);
-          //   } 
-            // TODO: send ACK back to client
+      //     client_packet_expected++;
+      //   }
+
+        
+      //   // TODO: send an ACK back
+      //   // add in packet
+      //   /* 7. Send data back to client */
+      //   char server_buf[] = "Hello world!";
+      //   int did_send = sendto(send_sockfd, server_buf, strlen(server_buf), 
+      //                     // socket  send data   how much to send
+      //                         0, (struct sockaddr*) &client_addr, 
+      //                     // flags   where to send
+      //                         sizeof(client_addr));
+      //   if (did_send < 0) {
+      //       cerr << "failed to send data from server to client" << endl;
+      //       exit(3);
+      //     } 
+      //     // TODO: send ACK back to client
+      // }
       
-       
       //================================================//
       //================================================//
       // PART 2: STANDARD IN 
       char std_in_buffer [MSS];
-      struct Packet send_pkt;
       ssize_t bytes_read;
-      while((bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
+      while(!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
         create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
-        send_packets_buff.push_back(send_pkt);
-      }
+        send_packets_buff.push_back(send_pkt); // store in case of retransmission
+        sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+        start_timer();
 
-      // send packets
-      /*
-      Example: 0 1 2 3 4 5
-      - size = 6
-      - send_base = 2
-      - 4 packets left to send: 2, 3, 4, 5
-      - cwnd_limit_upper_bound = 2 + 20 = 22 --> sends [2, 22) = 20
-      */
-
-      int buffer_size = send_packets_buff.size(); 
-      int cwnd_upper_bound = send_base + CWND_SIZE;
-      int limit = min(cwnd_upper_bound, buffer_size);
-      
-      for(; send_base < limit; send_base++){
-          Packet packet_to_send = send_packets_buff.at(send_base);
-          // print_packet(&packet_to_send);
-          sendto(client_sockfd, &send_packets_buff.at(send_base), sizeof(packet_to_send), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
-      }
-    } 
-
+        //cout << "sending: " << send_pkt.payload << endl;
+        // Check if congestion window is full now: seq_num now represents the next packet that needs to be sent
+        // Transmission window: [smallest unACK'd packet, smallest unACK'd packet + 20)
+        if(seq_num > received_cum_ack + CWND_SIZE){ // next seq num > last packet in cwnd 
+          // cout << "=================" << endl;
+          // cout << "cwnd is full now" << endl;
+          // cout << "next avalable seq num = " << seq_num << ", upper packet bound = " << received_cum_ack + CWND_SIZE << endl;
+          cwnd_full = true;  
+        }
+      } 
+    }
     /* 8. You're done! Terminate the connection */     
     close(client_sockfd);
     return 0; 
