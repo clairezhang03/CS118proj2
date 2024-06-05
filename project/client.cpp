@@ -59,7 +59,11 @@ int main(int argc, char *argv[]) {
         exit(3);
     }
 
-    const char* hostname = argv[2];
+
+    const char* hostname = LOCAL_HOST;
+    //const char* hostname = argv[2];
+    // if(hostname == "localhost")
+    //   hostname = LOCAL_HOST;
     // const char* ca_public_key_file = argv[4]; // change back!!
 
    
@@ -80,6 +84,7 @@ int main(int argc, char *argv[]) {
     flags_stdin |= O_NONBLOCK;
     fcntl(STDIN_FILENO, F_SETFL, flags_stdin);
 
+
     // 2. Construct server address
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -90,7 +95,7 @@ int main(int argc, char *argv[]) {
 
     struct sockaddr_in client_addr;
     client_addr.sin_family = AF_INET; 
-    client_addr.sin_port = htons(69); // 69 nice
+    client_addr.sin_port = htons(CLIENT_PORT); // 69 nice
     client_addr.sin_addr.s_addr = INADDR_ANY; 
    
     // 3. Bind socket to a port 
@@ -111,8 +116,8 @@ int main(int argc, char *argv[]) {
     //================================================//
 
     //define buffer for receiving packets from client
-    Packet client_receive_buffer[2000];
-    bool received[2000] = {false};
+    Packet client_receive_buffer[2001];
+    bool received[2001] = {false};
 
     //define packet expected number
     uint32_t client_packet_expected = 1;
@@ -145,11 +150,11 @@ int main(int argc, char *argv[]) {
 
           //one packet received at a time
           //note: client_receive_buffer -- index + 1 should = packet #
-          client_receive_buffer[received_pack_num - 1] = received_pkt;
-          received[received_pack_num - 1] = true;
+          client_receive_buffer[received_pack_num] = received_pkt;
+          received[received_pack_num] = true;
           //check with expected packet #
-          while (received[client_packet_expected - 1]){
-            Packet pkt = client_receive_buffer[client_packet_expected - 1];
+          while (received[client_packet_expected]){
+            Packet pkt = client_receive_buffer[client_packet_expected];
             // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
             // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
             // cout << "Received from Server: ";
