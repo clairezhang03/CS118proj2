@@ -9,7 +9,7 @@
 #define MSS 1024
 // #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
 
-#define CLIENT_PORT 6010
+#define CLIENT_PORT 6011
 #define LOCAL_HOST "127.0.0.1"
 #define RTO 1
 

@@ -60,8 +60,12 @@ int main(int argc, char *argv[]) {
     }
 
 
-    const char* hostname = LOCAL_HOST;
-    //const char* hostname = argv[2];
+
+    
+  const char* hostname = argv[2];
+  if (strcmp(hostname, "localhost") == 0) 
+      hostname = LOCAL_HOST;
+
     // if(hostname == "localhost")
     //   hostname = LOCAL_HOST;
     // const char* ca_public_key_file = argv[4]; // change back!!
