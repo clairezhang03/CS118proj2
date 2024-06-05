@@ -139,8 +139,8 @@ int main(int argc, char *argv[]) {
       ack_num = 0;
       int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
       if (bytes_recvd > 0) {
-        uint32_t received_pack_num = received_pkt.packet_number;
-        uint32_t received_pack_ack = received_pkt.ack_number;
+        uint32_t received_pack_num = ntohl(received_pkt.packet_number);
+        uint32_t received_pack_ack = ntohl(received_pkt.ack_number);
 
         //Case 1: Received packet is data
         if(received_pack_num != 0){
@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
             // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
             // cout << "Received from Server: ";
             // cout.flush(); 
-            write(STDOUT_FILENO, pkt.payload, pkt.payload_size);
+            write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
             // cout << endl;
 
             client_packet_expected++;
@@ -177,7 +177,7 @@ int main(int argc, char *argv[]) {
 
           // 1. reset timer
           start_timer();
-          received_cum_ack = received_pkt.ack_number;
+          received_cum_ack = ntohl(received_pkt.ack_number);
 
           // 2. Update cwnd bounds if necessary
           if(seq_num <= received_cum_ack + CWND_SIZE) // next available seq num <= last packet in upper bound

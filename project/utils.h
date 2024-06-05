@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <arpa/inet.h>
 
 #define CWND_SIZE 20
 #define MSS 1024
@@ -16,9 +17,9 @@
 using namespace std;
 
 struct Packet {
-    uint32_t packet_number;
+    uint32_t packet_number;  // 32 is long
     uint32_t ack_number;
-    uint16_t payload_size;
+    uint16_t payload_size;  // 16 is short
     uint16_t padding;
     char payload[MSS]; // Maximum segment size
 };
@@ -36,10 +37,10 @@ void print_packet(struct Packet* pkt){
 }
 
 void create_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ack_num, const char* payload_buff, unsigned int bytes_read){
-    pkt->packet_number = seq_num;
-    pkt->ack_number = ack_num; // This can be set to some relevant value
-    pkt->payload_size = bytes_read; // either size 1024 or less
-    pkt->padding = 0; 
+    pkt->packet_number = htonl(seq_num);
+    pkt->ack_number = htonl(ack_num); // This can be set to some relevant value
+    pkt->payload_size = htons(bytes_read); // either size 1024 or less
+    pkt->padding = htons(0); 
     memcpy(&pkt->payload, payload_buff, bytes_read);
 }
 

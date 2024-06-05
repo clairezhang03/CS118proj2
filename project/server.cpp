@@ -116,9 +116,10 @@ int main(int argc, char *argv[]) {
     first_packet = true;
     // Received packet must be data, not an ACK
     // DON'T THINK WE NEED IF CONIDTION --> SHOULD ALWAYS BE DATA, CAN'T BE PURE ACK??, KEEP IN CASE
-    if (received_pkt.packet_number != 0) {
-      receive_buffer[received_pkt.packet_number] = received_pkt;
-      received[received_pkt.packet_number] = true;
+    uint32_t received_pkt_number = ntohl(received_pkt.packet_number);
+    if (received_pkt_number != 0) {
+      receive_buffer[received_pkt_number] = received_pkt;
+      received[received_pkt_number] = true;
       //check with expected packet #
     while (received[client_packet_expected]){
       Packet pkt = receive_buffer[client_packet_expected];
@@ -126,7 +127,7 @@ int main(int argc, char *argv[]) {
       // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
       // cout << "Received from Client: ";
       // cout.flush(); 
-      write(STDOUT_FILENO, pkt.payload, pkt.payload_size);
+      write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
       // cout << endl;
       client_packet_expected++;
     }
@@ -139,7 +140,7 @@ int main(int argc, char *argv[]) {
 
       // 1. reset timer
       start_timer();
-      received_cum_ack = received_pkt.ack_number;
+      received_cum_ack = ntohl(received_pkt.ack_number);
 
       // 2. Update cwnd bounds if necessary
       if(seq_num <= received_cum_ack + CWND_SIZE) // next available seq num <= last packet in upper bound
@@ -170,8 +171,8 @@ int main(int argc, char *argv[]) {
         ack_num = 0;
         int bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
         if (bytes_recvd > 0) {
-          uint32_t received_pack_num = received_pkt.packet_number;
-          uint32_t received_pack_ack = received_pkt.ack_number;
+          uint32_t received_pack_num = ntohl(received_pkt.packet_number);
+          uint32_t received_pack_ack = ntohl(received_pkt.ack_number);
 
           //Case 1: Received packet contains data
           if(received_pack_num != 0){
@@ -185,7 +186,7 @@ int main(int argc, char *argv[]) {
               // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
               // cout << "Received from Client: ";
               // cout.flush(); 
-              write(STDOUT_FILENO, pkt.payload, pkt.payload_size);
+              write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
               // cout << endl;
 
               client_packet_expected++;
@@ -202,7 +203,7 @@ int main(int argc, char *argv[]) {
 
             // 1. reset timer
             start_timer();
-            received_cum_ack = received_pkt.ack_number;
+            received_cum_ack = ntohl(received_pkt.ack_number);
 
             // 2. Update cwnd bounds if necessary
             if(seq_num <= received_cum_ack + CWND_SIZE) // next available seq num <= last packet in upper bound
