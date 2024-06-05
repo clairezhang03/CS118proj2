@@ -9,11 +9,13 @@
 #include <cstdint>
 #include <vector>
 #include "utils.h"
+#include <time.h>
 
 using namespace std;
 int seq_num = 1;
-int ack_num = 1;
+int ack_num = 0;
 vector<Packet> send_packets_buff;
+vector<bool> acked_packets;
 int send_base = 1;
 
 int main(int argc, char *argv[]) {
@@ -70,6 +72,11 @@ int main(int argc, char *argv[]) {
       exit(3);
     } 
 
+     // don't move on until server gets a connection from client
+    Packet received_pkt, send_pkt, dummy_pkt;
+    send_packets_buff.push_back(dummy_pkt); // dummy packet to match sequence number
+    acked_packets.push_back(true);
+
     //================================================//
     //================================================//
 
@@ -79,22 +86,48 @@ int main(int argc, char *argv[]) {
     //define packet expected number
     u_int32_t client_packet_expected = 1;
 
-    // Place a dummy packet so sequence number does not start with 0
-    Packet dummy_pkt;
-    send_packets_buff.push_back(dummy_pkt);
     while(true){
-      /* 4. Create buffer to store incoming data */
-      // READ FROM CLIENT
-      Packet client_buf;
+      // reset bytes_recvd = 0??
       /* 5. Listen for data from clients */
-      int bytes_recvd = recvfrom(client_sockfd, &client_buf, sizeof(client_buf), 0, (struct sockaddr*) &serv_addr, &server_size);
+      int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
       if (bytes_recvd > 0) {
-          cout << "Received from server: ";
+        int received_pack_num = received_pkt.packet_number;
+
+        //Case 1: Received packet is data
+        if(received_pack_num != 0){
+          // TODO: Update ACK num
+          ack_num = received_pack_num; // CHANGE
+          cout << "Received from Server: ";
           cout.flush(); 
-          write(STDOUT_FILENO, client_buf.payload, client_buf.payload_size);
+          write(STDOUT_FILENO, received_pkt.payload, received_pkt.payload_size);
           cout << endl;
-          bytes_recvd = 0;
+          
+          // Create and send ACK packet
+          create_packet(&send_pkt, 0, ack_num, "0", 1); // data set to "0" for an ACK
+          // Start the timer
+          time_t start_time = time(NULL);
+
+          // Wait for 5 seconds
+          // while (difftime(time(NULL), start_time) < 1) {
+          //     // You can do other tasks here if needed, or simply sleep
+          //     usleep(100000);  // sleep for 0.1 seconds to reduce CPU usage
+          // }
+
+          sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+        }
+
+        else{ // Case 2: Received packet is an ACK
+          int received_ack_num = received_pkt.ack_number;
+          cout << "Received ACK from server: " << received_ack_num << endl;
+
+          // TODO: set ACK num correctly
+          ack_num = received_pack_num + 1;
+
+         
+        }
       }
+
+      
       
         // // casting received data to a packet
         // Packet* client_packet = reinterpret_cast<Packet*>(client_buf);
@@ -133,7 +166,7 @@ int main(int argc, char *argv[]) {
       struct Packet send_pkt;
       ssize_t bytes_read;
       while((bytes_read = read(STDIN_FILENO, std_in_buffer, MSS))> 0){
-        create_packet(&send_pkt, seq_num++, ack_num++, (const char*) std_in_buffer, bytes_read);
+        create_packet(&send_pkt, seq_num++, 0, (const char*) std_in_buffer, bytes_read);
         send_packets_buff.push_back(send_pkt);
       }
 
@@ -160,6 +193,4 @@ int main(int argc, char *argv[]) {
     /* 8. You're done! Terminate the connection */     
     close(client_sockfd);
     return 0; 
-
-
 }

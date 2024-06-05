@@ -5,14 +5,14 @@
 #include <string.h>
 #include <vector>
 
-#define CWND_SIZE 20
-#define MSS 1024
+#define CWND_SIZE 3
+#define MSS 5
 #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
 
 #define CLIENT_PORT 6002
 #define CLIENT_LISTENING_PORT 5001
 #define LOCAL_HOST "127.0.0.1"
-
+#define RTO 1
 
 using namespace std;
 
@@ -40,7 +40,7 @@ void create_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ac
     pkt->packet_number = seq_num;
     pkt->ack_number = ack_num; // This can be set to some relevant value
     pkt->payload_size = bytes_read; // either size 1024 or less
-    pkt->padding = 0; // TODO: CHANGE TO CORRECT PADDING
+    pkt->padding = 0; 
     memcpy(&pkt->payload, payload_buff, bytes_read);
 }
 
