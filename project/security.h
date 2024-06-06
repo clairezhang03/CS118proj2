@@ -1,6 +1,7 @@
 #pragma once
 
 #include <openssl/evp.h>
+#include "utils.h"
 
 #define SECRET_SIZE 32
 #define IV_SIZE 16
@@ -89,3 +90,10 @@ void hmac(char* data, size_t size, char* digest);
 
 // Clean up all buffers and keys
 void clean_up();
+
+// Additional helper functions
+void create_self_signed_cert(Certificate* cert, size_t *cert_size);
+void create_client_hello(ClientHello* client_hello, uint8_t comm_type);
+void create_server_hello(ServerHello* server_hello, uint8_t comm_type, char* client_nonce);
+void create_key_exchange_request(KeyExchangeRequest* key_exchange, char *server_nonce);
+void create_data_message(DataMessage* data_message, uint16_t payload_size, char *payload, int using_mac);

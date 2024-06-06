@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <arpa/inet.h>
 #include "security.h"
+#include "utils.h"
 
 EVP_PKEY* ec_priv_key = NULL;
 EVP_PKEY* ec_peer_public_key = NULL;
@@ -190,118 +191,96 @@ void write_int_to_buffer(char *buffer, int value, int size) {
 }
 
 //helper function to create self-signed certificate
-void create_self_signed_cert(char **cert, size_t *cert_size) {
+void create_self_signed_cert(struct Certificate* cert, size_t *cert_size) {
     //CHANGE
-    //key length and padding, pub key size, 255 bytes for signature
-    *cert_size = 4 + pub_key_size + 255; 
-    *cert = (char *)malloc(*cert_size);
+    cert->KeyLength = htons(pub_key_size); // cast?
+    cert->Padding = htons(0);
+    cert->PublicKey = public_key;
 
-    //use helper
-    write_int_to_buffer(*cert, pub_key_size, 2);
-    memset(*cert + 2, 0, 2); //padding
-    memcpy(*cert + 4, public_key, pub_key_size);
-    
     //sign the public key
     char signature[255];
     size_t sig_size = sign(public_key, pub_key_size, signature);
-    memcpy(*cert + 4 + pub_key_size, signature, sig_size);
+    memcpy(cert->Signature, signature, sig_size);
 
-    *cert_size = 4 + pub_key_size + sig_size;
+    // *cert_size = 4 + pub_key_size + sig_size;
+    *cert_size = sizeof(&cert);
 }
 
 //ClientHello message
-void create_client_hello(char **message, size_t *message_size, int comm_type) {
-    //CHANGE
-    //CommType and Padding, nonce
-    *message_size = 4 + 32;
-    *message = (char *)malloc(*message_size);
+void create_client_hello(struct ClientHello* client_hello, uint8_t comm_type) {
+    client_hello->CommType = htons(comm_type);
 
-    (*message)[0] = comm_type;
-    memset(*message + 1, 0, 3); //padding
-    generate_nonce(*message + 4, 32);
+    client_hello->Padding[0] = htons(0);
+    client_hello->Padding[1] = htons(0);
+    client_hello->Padding[2] = htons(0);
+
+    char client_nonce[32];
+    generate_nonce(client_nonce, 32);
+    memcpy(&client_hello->ClientNonce, client_nonce, 32);
 }
 
 //ServerHello message
-void create_server_hello(char **message, size_t *message_size, int comm_type, char *client_nonce, size_t client_nonce_size) {
+void create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce) {
+    server_hello->CommType = htons(comm_type);
+    
     char server_nonce[32];
     generate_nonce(server_nonce, 32);
-
+    memcpy(&server_hello->ServerNonce, server_nonce, 32);
+    
     //create server certificate
-    char *server_cert;
+    struct Certificate server_cert;
     size_t server_cert_size;
     create_self_signed_cert(&server_cert, &server_cert_size);
 
+    server_hello->CertSize = htons(server_cert_size);
+    server_hello->ServerCertificate = server_cert;
+
     //sign client nonce
     char signature[255];
-    size_t sig_size = sign(client_nonce, client_nonce_size, signature);
-
-    //CHANGE
-    //CommType SigSize and CertSize, nonce, server_cert_size, signature
-    *message_size = 4 + 32 + server_cert_size + sig_size;
-    *message = (char *)malloc(*message_size);
-
-    (*message)[0] = comm_type;
-    (*message)[1] = sig_size;
-    write_int_to_buffer(*message + 2, server_cert_size, 2);
-    memcpy(*message + 4, server_nonce, 32);
-    memcpy(*message + 36, server_cert, server_cert_size);
-    memcpy(*message + 36 + server_cert_size, signature, sig_size);
-
-    free(server_cert);
+    size_t sig_size = sign(client_nonce, 32, signature);
+    memcpy(server_hello->ClientNonceSignature, signature, sig_size);
+    server_hello->SigSize = htons(sig_size);
 }
 
 //KeyExchangeRequest message
-void create_key_exchange_request(char **message, size_t *message_size, char *server_nonce, size_t server_nonce_size) {
+void create_key_exchange_request(struct KeyExchangeRequest* key_exchange, char *server_nonce) {
     //create client certificate
-    char *client_cert;
+    key_exchange->Padding = htons(0);
+
+    struct Certificate client_cert;
     size_t client_cert_size;
     create_self_signed_cert(&client_cert, &client_cert_size);
+    key_exchange->CertSize = htons(client_cert_size);
+    key_exchange->ClientCertificate = client_cert;
 
     //sign server nonce
     char signature[255];
-    size_t sig_size = sign(server_nonce, server_nonce_size, signature);
-
-    //CHANGE
-    //Padding SigSize and CertSize, client_cert_size, signature
-    *message_size = 4 + client_cert_size + sig_size;
-    *message = (char *)malloc(*message_size);
-
-    memset(*message, 0, 1); //padding
-    (*message)[1] = sig_size;
-    write_int_to_buffer(*message + 2, client_cert_size, 2);
-    memcpy(*message + 4, client_cert, client_cert_size);
-    memcpy(*message + 4 + client_cert_size, signature, sig_size);
-
-    free(client_cert);
+    size_t sig_size = sign(server_nonce, 32, signature);
+    memcpy(key_exchange->ServerNonceSignature, signature, sig_size);
+    key_exchange->SigSize = htons(sig_size);
 }
 
 //Data message
-void create_data_message(char **message, size_t *message_size, char *data, size_t data_size, int using_mac) {
+void create_data_message(struct DataMessage* data_message, uint16_t payload_size, char *payload, int using_mac) {
+    data_message->PayloadSize = htons(payload_size);
+    data_message->Padding = htons(0);
+
     char iv[IV_SIZE];
-    char encrypted_data[data_size + IV_SIZE]; 
+    char encrypted_payload[payload_size]; 
     //note: padded data size can be up to AES_BLOCK_SIZE bytes larger than input data size
-    size_t encrypted_data_size = encrypt_data(data, data_size, iv, encrypted_data, using_mac);
+    size_t encrypted_payload_size = encrypt_data(payload, payload_size, iv, encrypted_payload, using_mac);
+    memcpy(data_message->IV, iv, IV_SIZE);
+    memcpy(data_message->payload, encrypted_payload, encrypted_payload_size);
 
     //compute HMAC -- if using mac
     char mac[MAC_SIZE];
     if (using_mac) {
-        char *mac_data = (char *)malloc(IV_SIZE + encrypted_data_size);
+        char *mac_data = (char *)malloc(IV_SIZE + encrypted_payload_size);
         memcpy(mac_data, iv, IV_SIZE);
-        memcpy(mac_data + IV_SIZE, encrypted_data, encrypted_data_size);
-        hmac(mac_data, IV_SIZE + encrypted_data_size, mac);
+        memcpy(mac_data + IV_SIZE, encrypted_payload, encrypted_payload_size);
+        hmac(mac_data, IV_SIZE + encrypted_payload_size, mac);
         free(mac_data);
-    }
-
-    //PayloadSize and Padding, IV_SIZE, encrypted_data_size, optional MAC_SIZE
-    *message_size = 4 + IV_SIZE + encrypted_data_size + (using_mac ? MAC_SIZE : 0);
-    *message = (char *)malloc(*message_size);
-
-    write_int_to_buffer(*message, encrypted_data_size, 2);
-    memset(*message + 2, 0, 2); //padding
-    memcpy(*message + 4, iv, IV_SIZE);
-    memcpy(*message + 4 + IV_SIZE, encrypted_data, encrypted_data_size);
-    if (using_mac) {
-        memcpy(*message + 4 + IV_SIZE + encrypted_data_size, mac, MAC_SIZE);
+        memcpy(data_message->MACcode, mac, MAC_SIZE);
     }
 }
 

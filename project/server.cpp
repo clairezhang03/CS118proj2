@@ -10,7 +10,7 @@
 #include <stdbool.h>
 #include "utils.h"
 #include <time.h>
-// #include "security.h"
+#include "security.h"
 
 using namespace std;
 uint32_t seq_num = 1;

@@ -9,7 +9,7 @@
 #include <vector>
 #include "utils.h"
 #include <time.h>
-// #include "security.h"
+#include "security.h"
 
 using namespace std;
 uint32_t seq_num = 1;
@@ -98,7 +98,15 @@ int main(int argc, char *argv[]) {
     if (did_bind < 0){
       cerr << "Client: socket failed to bind" << endl;
       exit(3);
-    } 
+    }
+
+    // Security
+    // if (flag == 1){
+    //   char *client_hello;
+    //   size_t client_hello_size;
+    //   create_client_hello(&client_hello, &client_hello_size, 1);
+
+    // }
 
      // don't move on until server gets a connection from client
     Packet received_pkt, send_pkt, dummy_pkt;
