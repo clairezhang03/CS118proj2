@@ -5,6 +5,7 @@
 #include <string.h>
 #include <vector>
 #include <arpa/inet.h>
+#include <stdint.h>
 
 #define CWND_SIZE 20
 #define MSS 1024
@@ -22,6 +23,12 @@ struct Packet {
     uint16_t payload_size;  // 16 is short
     uint16_t padding;
     char payload[MSS]; // Maximum segment size
+};
+
+struct SecurityHeader {
+    uint8_t  MsgType;  // 8 bits for MsgType
+    uint8_t  Padding;  // 8 bits for Padding
+    uint16_t MsgLen;   // 16 bits for MsgLen
 };
 
 void print_packet(struct Packet* pkt){
