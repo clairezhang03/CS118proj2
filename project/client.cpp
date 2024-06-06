@@ -39,16 +39,22 @@ int timer_expired() {
 int main(int argc, char *argv[]) {
     // does not have proper formatting for error
     if (argc < 5) { 
-        cerr << "client <flag> <hostname> <port> <ca_public_key_file>" << endl;
+        cerr << "client <use_security> <hostname> <port> <ca_public_key_file>" << endl;
         exit(3);
     }
 
-    int flag;
+    int use_security;
     int server_listening_port;
-    // int client_port;
+    char* ca_public_key_file;
     try {
-        flag = stoi(argv[1]);
+        use_security = stoi(argv[1]);
+        const char* hostname = argv[2];
+        if (strcmp(hostname, "localhost") == 0) 
+          hostname = LOCAL_HOST;
         server_listening_port = stoi(argv[3]);
+
+        if(use_security) // public key file passed in if security is used
+          ca_public_key_file = argv[4];
     } catch (const invalid_argument& e) {
         cerr << "Invalid argument for flag or port. Please provide valid integers." << endl;
         exit(3);
@@ -57,9 +63,7 @@ int main(int argc, char *argv[]) {
         exit(3);
     }
 
-    const char* hostname = argv[2];
-    if (strcmp(hostname, "localhost") == 0) 
-      hostname = LOCAL_HOST;
+   
 
     // 1. Create socket 
     int client_sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -100,13 +104,19 @@ int main(int argc, char *argv[]) {
       exit(3);
     }
 
-    // Security
-    // if (flag == 1){
-    //   char *client_hello;
-    //   size_t client_hello_size;
-    //   create_client_hello(&client_hello, &client_hello_size, 1);
+    //************************************************//
+    //************************************************//
+    // HANDLE SECURITY HANDSHAKE HERE
+    if (use_security == 1){
+      char client_hello;
+      size_t client_hello_size;
+      create_client_hello(&client_hello, &client_hello_size, 1);
 
-    // }
+    }
+
+
+    //************************************************//
+    //************************************************//
 
      // don't move on until server gets a connection from client
     Packet received_pkt, send_pkt, dummy_pkt;
@@ -199,7 +209,7 @@ int main(int argc, char *argv[]) {
         sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         start_timer();
         //cout << "sending: " << send_pkt.payload << endl;
-        
+
         // Check if congestion window is full now: seq_num now represents the next packet that needs to be sent
         // Transmission window: [smallest unACK'd packet, smallest unACK'd packet + 20)
         if(seq_num > received_cum_ack + CWND_SIZE){ // next seq num > last packet in cwnd 

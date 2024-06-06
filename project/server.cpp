@@ -41,15 +41,23 @@ int timer_expired() {
 int main(int argc, char *argv[]) {
     // does not have proper formatting for error
     if (argc < 5) { 
-        cerr << "Usage: server <flag> <port> <private_key_file> <certificate_file>" << endl;
+        cerr << "Usage: server <use_security> <port> <private_key_file> <certificate_file>" << endl;
         exit(3);
     }
 
-    int flag;
+    int use_security;
     int listening_port;
+    const char* private_key_file;
+    const char* certificate_file;
     try {
-        flag = stoi(argv[1]);
+        use_security = stoi(argv[1]);
         listening_port = stoi(argv[2]);
+
+        if(use_security){
+          private_key_file = argv[3];
+          certificate_file = argv[4];
+        }
+        
     } catch (const invalid_argument& e) {
         cerr << "Invalid argument for flag or port. Please provide valid integers." << endl;
         exit(3);
@@ -57,9 +65,6 @@ int main(int argc, char *argv[]) {
         cerr << "Argument out of range for flag or port. Please provide valid integers within range." << endl;
         exit(3);
     }
-
-    const char* private_key_file = argv[3];
-    const char* certificate_file = argv[4];
 
     // 1. Create a listening socket (UDP)
     int serv_sockfd = socket(AF_INET, SOCK_DGRAM, 0);

@@ -35,11 +35,11 @@ struct Certificate {
     uint16_t KeyLength;
     uint16_t Padding;
     char* PublicKey;
-    char Signature[255];
+    char Signature[255]; // 70 - 72 bytes, always less than 255 but should be any
 };
 
 struct ClientHello {
-    uint8_t CommType; // 8 bits for CommType
+    uint8_t CommType; // 8 bits for CommType, don't need to reorder because only a byte
     uint8_t Padding[3]; // 24 bits for Padding
     char ClientNonce[32]; // 32 Bytes for Client Nonce
 };
@@ -48,7 +48,7 @@ struct ServerHello {
     uint8_t CommType;
     uint8_t SigSize;
     uint16_t CertSize;
-    char ServerNonce[32];
+    char ServerNonce[32]; // always exactly 32 bytes
     struct Certificate ServerCertificate;
     char ClientNonceSignature[255];
 };

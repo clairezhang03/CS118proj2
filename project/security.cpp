@@ -206,9 +206,9 @@ void create_self_signed_cert(struct Certificate* cert, size_t *cert_size) {
     *cert_size = sizeof(&cert);
 }
 
-//ClientHello message
+// ClientHello message
 void create_client_hello(struct ClientHello* client_hello, uint8_t comm_type) {
-    client_hello->CommType = htons(comm_type);
+    client_hello->CommType = comm_type;
 
     client_hello->Padding[0] = htons(0);
     client_hello->Padding[1] = htons(0);
@@ -221,7 +221,7 @@ void create_client_hello(struct ClientHello* client_hello, uint8_t comm_type) {
 
 //ServerHello message
 void create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce) {
-    server_hello->CommType = htons(comm_type);
+    server_hello->CommType = comm_type;
     
     char server_nonce[32];
     generate_nonce(server_nonce, 32);
