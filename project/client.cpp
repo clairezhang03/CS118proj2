@@ -44,17 +44,19 @@ int main(int argc, char *argv[]) {
     }
 
     int use_security;
+    const char* hostname;
     int server_listening_port;
     char* ca_public_key_file;
     try {
         use_security = stoi(argv[1]);
-        const char* hostname = argv[2];
+        hostname = argv[2];
         if (strcmp(hostname, "localhost") == 0) 
           hostname = LOCAL_HOST;
         server_listening_port = stoi(argv[3]);
 
-        if(use_security) // public key file passed in if security is used
+        if(use_security){ // public key file passed in if security is used
           ca_public_key_file = argv[4];
+        }
     } catch (const invalid_argument& e) {
         cerr << "Invalid argument for flag or port. Please provide valid integers." << endl;
         exit(3);
@@ -104,16 +106,6 @@ int main(int argc, char *argv[]) {
       exit(3);
     }
 
-    //************************************************//
-    //************************************************//
-    // HANDLE SECURITY HANDSHAKE HERE
-    if (use_security == 1){
-      char client_hello;
-      size_t client_hello_size;
-      create_client_hello(&client_hello, &client_hello_size, 1);
-
-    }
-
 
     //************************************************//
     //************************************************//
@@ -122,15 +114,76 @@ int main(int argc, char *argv[]) {
     Packet received_pkt, send_pkt, dummy_pkt;
     send_packets_buff.push_back(dummy_pkt); // dummy packet to match sequence number
 
-    //================================================//
-    //================================================//
-
     //define buffer for receiving packets from client
-    Packet client_receive_buffer[2001];
-    bool received[2001] = {false};
+    Packet client_receive_buffer[2003];
+    bool received[2003] = {false};
 
     //define packet expected number
     uint32_t client_packet_expected = 1;
+
+
+    //************************************************//
+    //************************************************//
+    // HANDLE SECURITY HANDSHAKE HERE
+    if (use_security == 1){
+      generate_private_key(); //fills private key information
+
+      struct ClientHello client_hello;
+      create_client_hello(&client_hello, 1);
+
+      create_packet(&send_pkt, seq_num++, ack_num, (const char*)&client_hello, sizeof(client_hello));
+      sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+      start_timer();
+
+      bool waiting_server_hello = true;
+
+      struct ServerHello* server_hello;
+
+      while(true){ //CHANGE TO VARIABLE
+      
+        if (waiting_server_hello){
+
+          //retransmission
+          if(timer_on && timer_expired()){
+            //resend clienthello
+            sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+            start_timer();
+            //check if we need to worry about send_packets_buff -- update this if we do
+          }
+
+          int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
+          if (bytes_recvd > 0) {
+            //receive server hello
+            waiting_server_hello = false;
+
+            uint16_t payload_size = ntohs(received_pkt.payload_size);
+            if (payload_size >= sizeof(struct ServerHello)) {
+                // Cast the payload to a ServerHello struct
+                server_hello = (struct ServerHello*)received_pkt.payload;
+
+                // Access the fields of server_hello
+                printf("MsgType: %u\n", server_hello->Header.MsgType);
+                printf("CommType: %u\n", server_hello->CommType);
+                printf("SigSize: %u\n", server_hello->SigSize);
+                printf("CertSize: %u\n", ntohs(server_hello->CertSize));
+                printf("ServerNonce: %.*s\n", 32, server_hello->ServerNonce);
+                // Assuming the Certificate structure has a printable field, e.g., data
+                //printf("ServerCertificate: %.*s\n", sizeof(server_hello->ServerCertificate), server_hello->ServerCertificate);
+                //printf("ClientNonceSignature: %.*s\n", sizeof(server_hello->ClientNonceSignature), server_hello->ClientNonceSignature);
+            } else {
+                cerr << "Payload size mismatch or insufficient data" << endl; 
+                exit(3);
+            }
+            client_packet_expected++;
+            ack_num = client_packet_expected - 1;
+          }
+        }
+      }
+
+    }
+
+    //================================================//
+    //================================================//
 
     while(true){
       // 1. Check if timer expired --> retransmit

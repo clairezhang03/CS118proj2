@@ -47,8 +47,8 @@ int main(int argc, char *argv[]) {
 
     int use_security;
     int listening_port;
-    const char* private_key_file;
-    const char* certificate_file;
+    char* private_key_file;
+    char* certificate_file;
     try {
         use_security = stoi(argv[1]);
         listening_port = stoi(argv[2]);
@@ -108,16 +108,91 @@ int main(int argc, char *argv[]) {
     send_packets_buff.push_back(dummy_pkt); // dummy packet to match sequence number
 
     //define buffer for receiving packets from client
-    Packet receive_buffer[2001];
-    bool received[2001] = {false};
+    Packet receive_buffer[2003];
+    bool received[2003] = {false};
 
     //define packet expected number
     uint32_t client_packet_expected = 1;
+    cout << "here26" << endl;
 
     int bytes_recvd = -1;
     while(bytes_recvd < 0)
       bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
-    
+
+    //************************************************//
+    //************************************************//
+    // HANDLE SECURITY HANDSHAKE HERE
+
+    uint8_t comm_type = 0;
+    struct ClientHello* client_hello;
+    char* client_nonce;
+
+    if (use_security == 1){
+      //received_pkt --> payload
+      uint16_t payload_size = ntohs(received_pkt.payload_size);
+      if (payload_size == sizeof(struct ClientHello)) {
+          // Cast the payload to a ClientHello struct
+
+          client_hello = (struct ClientHello*)received_pkt.payload;
+
+          uint8_t msg_type = client_hello->Header.MsgType;
+          if (msg_type != 1){
+             cerr << "wrong message type received" << endl;
+             exit(3);
+          }
+          printf("MsgType: %u\n", client_hello->Header.MsgType);
+          printf("CommType: %u\n", client_hello->CommType);
+          printf("ClientNonce: %.*s\n", 32, client_hello->ClientNonce);
+          
+      } else {
+        cerr << "Payload size mismatch" << endl;
+        exit(3);
+      }
+      //update expected for receive buffer
+      client_packet_expected++;
+      ack_num = client_packet_expected - 1;
+      //set the comm_type as a flag
+      comm_type = client_hello->CommType;
+      client_nonce = client_hello->ClientNonce; //Check if &
+      printf("here2 ");
+
+      //constructing and sending a ServerHello
+      struct ServerHello server_hello;
+      load_certificate(certificate_file);
+      load_private_key(private_key_file);
+      derive_public_key();
+      create_server_hello(&server_hello, comm_type, client_nonce, certificate_file, private_key_file);
+      printf("here3");
+      create_packet(&send_pkt, seq_num++, ack_num, (const char*)&server_hello, sizeof(server_hello));
+      printf("here4");
+      sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+      printf("here5");
+      start_timer();
+
+      bool waiting_key_exchange = true;
+
+      while(true){ //CHANGE TO VARIABLE
+        if (waiting_key_exchange){
+
+          //retransmission
+          if(timer_on && timer_expired()){
+            //resend serverhello
+            sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+            start_timer();
+          }
+
+          bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
+          if (bytes_recvd > 0) {
+            //receive key exchange
+          }
+        }
+      }
+
+
+    }
+
+
+
     first_packet = true;
     // Received packet must be data, not an ACK
     uint32_t received_pkt_number = ntohl(received_pkt.packet_number);

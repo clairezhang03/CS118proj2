@@ -43,10 +43,12 @@ void load_certificate(char* filename);
 
 // Generate private key from the NID_X9_62_prime256v1 elliptic curve
 void generate_private_key();
+//client
 
 // From private key (make sure to call `load_private_key` or
 // `generate_private_key` first), derive public key point on elliptic curve
 void derive_public_key();
+//client
 
 // From private key (make sure to call `load_private_key` or
 // `generate_private_key` first) and peer key (make sure to call
@@ -66,7 +68,7 @@ size_t sign(char* data, size_t size, char* signature);
 // `ec_ca_public_key`), verify the authenticity of an ECDSA signature
 // Returns 1 if verified successfully, other values if not
 int verify(char* data, size_t size, char* signature, size_t sig_size, EVP_PKEY* authority);
-
+//server SHOULD verify the client nonce signature -- key request 
 // Generate cryptographically secure random data
 void generate_nonce(char* buf, int size);
 
@@ -83,10 +85,12 @@ size_t encrypt_data(char *data, size_t size, char *iv, char *cipher, int using_m
 // Set `using_mac` to a non-zero value to use the `enc_key` for decryption
 // Returns size of data
 size_t decrypt_cipher(char *cipher, size_t size, char *iv, char *data, int using_mac);
+//other side need to decrypt
 
 // Using the MAC key, generate an HMAC SHA-256 digest of `data` and place it in the
 // buffer `digest`. Digest will always be 32 bytes (since SHA-256).
 void hmac(char* data, size_t size, char* digest);
+//
 
 // Clean up all buffers and keys
 void clean_up();
@@ -94,6 +98,7 @@ void clean_up();
 // Additional helper functions
 void create_self_signed_cert(Certificate* cert, size_t *cert_size);
 void create_client_hello(ClientHello* client_hello, uint8_t comm_type);
-void create_server_hello(ServerHello* server_hello, uint8_t comm_type, char* client_nonce);
+void parse_certificate(char* cert_data, struct Certificate* cert);
+void create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce, char* certificate_file, char* private_key_file);
 void create_key_exchange_request(KeyExchangeRequest* key_exchange, char *server_nonce);
 void create_data_message(DataMessage* data_message, uint16_t payload_size, char *payload, int using_mac);
