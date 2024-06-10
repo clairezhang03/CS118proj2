@@ -261,7 +261,8 @@ int main(int argc, char *argv[]) {
           char cert_ke[cert_size_key_exchange];
           char* cert_sig_data = key_exchange->ClientCertificate_ServerNonceSignature;
 
-          memcpy(&cert_ke, cert_sig_data, cert_size);
+          cout << cert_size_key_exchange << endl;
+          memcpy(&cert_ke, cert_sig_data, cert_size_key_exchange);
           cout <<"cert" << endl;
 
           char* cert_data = cert_ke;
@@ -271,6 +272,7 @@ int main(int argc, char *argv[]) {
           cout << "parse cert" << endl;
 
           uint16_t key_length_ke = ntohs(cert_ke_cert->KeyLength);
+          cout << key_length_ke << endl;
 
           char* cert_ke_cert_pub_key_sig = cert_ke_cert->PublicKey_Signature;
           char cert_ke_pub_key[key_length_ke];
@@ -286,6 +288,12 @@ int main(int argc, char *argv[]) {
           if (comm_type ==  1){
             derive_keys();
           }
+
+          cout.flush();
+
+          // fprintf(stderr, "This is secret: %s", secret);
+          printHex(secret, SECRET_SIZE);
+          // cout << secret << endl;
           
           struct SecurityHeader finish_message;
           finish_message.MsgType = 20;

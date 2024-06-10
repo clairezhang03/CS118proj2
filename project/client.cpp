@@ -232,6 +232,9 @@ int main(int argc, char *argv[]) {
 
           char* cert_pub_key_data = cert_pub_key;
           cout << "pubkey" << endl;
+          cout.flush();
+          fprintf(stderr, "This is server pubkey: %s", cert_pub_key);
+          fprintf(stderr, "\nThis is client pubkey: %s", public_key);
           printHex(cert_pub_key, key_length);
           char* sig_data = cert_sig;
           cout << "cert sig" << endl;
@@ -277,7 +280,9 @@ int main(int argc, char *argv[]) {
           struct Certificate* client_cert = (Certificate*)::operator new(4 + pub_key_size + client_cert_sig_size);
           char client_cert_message[4 + pub_key_size + client_cert_sig_size];
 
-          memcpy(client_cert_message, &pub_key_size, sizeof(uint16_t));
+          int pub_key_size_network = htons(pub_key_size);
+
+          memcpy(client_cert_message, &pub_key_size_network, sizeof(uint16_t));
 
           memcpy(client_cert_message + sizeof(uint16_t), &zero, sizeof(uint16_t));
 
@@ -320,7 +325,7 @@ int main(int argc, char *argv[]) {
 
           memcpy(message + sizeof(header) + sizeof(uint8_t), &sig_size, sizeof(s_size));
 
-          size_t client_cert_message_size = sizeof(client_cert_message);
+          size_t client_cert_message_size = htons(sizeof(client_cert_message));
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size), &client_cert_message_size, sizeof(uint16_t)); //CHECK
 
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t), &client_cert_message, sizeof(client_cert_message));
@@ -336,6 +341,8 @@ int main(int argc, char *argv[]) {
           cout << "sig size server nonce " << sig_size_nonce << endl;
           cout << "key exchange message size " << sizeof(message) << endl;
           cout << "MOM WE MADE IT" << endl;
+
+          printHex(secret, SECRET_SIZE);
 
           create_packet(&send_pkt, seq_num++, ack_num, (const char*)key_exchange, sizeof(message));
           sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
