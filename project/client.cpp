@@ -167,7 +167,7 @@ int main(int argc, char *argv[]) {
                 // Access the fields of server_hello
                 printf("MsgType: %u\n", server_hello->Header.MsgType);
                 // printf("CommType: %u\n", server_hello->CommType);
-                // printf("SigSize: %u\n", server_hello->SigSize);
+                printf("SigSize: %u\n", server_hello->SigSize);
                 // printf("CertSize: %u\n", ntohs(server_hello->CertSize));
                 // printf("ServerNonce: %.*s\n", 32, server_hello->ServerNonce);
                 // Assuming the Certificate structure has a printable field, e.g., data
@@ -192,25 +192,38 @@ int main(int argc, char *argv[]) {
           char* cert_sig_data = server_hello->ServerCertificate_ClientNonceSignature;
 
           memcpy(&cert, cert_sig_data, cert_size);
+          cout <<"cert" << endl;
           memcpy(&client_nonce_sig, cert_sig_data + cert_size, sig_size);
+          cout <<"client nonce sig" << endl;
 
           char* cert_data = cert;
 
-          struct Certificate cert_nonce;
-          parse_certificate(cert_data, &cert_nonce, cert_size);
+          struct Certificate* cert_nonce = (Certificate*)::operator new(cert_size);
+          // parse_certificate(cert_data, &cert_nonce, cert_size);
+        
+          memcpy(cert_nonce, cert_data, cert_size);
+          cout << "parse cert" << endl;
 
-          uint16_t key_length = cert_nonce.KeyLength;
+
+
+          uint16_t key_length = ntohs(cert_nonce->KeyLength);
+          // cout << key_length << endl;
           char cert_sig[cert_size - 4 - key_length];
-          memcpy(cert_sig, cert_nonce.PublicKey_Signature + key_length, cert_size - 4 - key_length);
+          // cout << cert_nonce->PublicKey_Signature << endl;
+          char* cert_nonce_pub_key_sig = cert_nonce->PublicKey_Signature;
+          memcpy(&cert_sig, cert_nonce_pub_key_sig + key_length, cert_size - 4 - key_length);
+          cout << "cert_sig" << endl;
 
           char cert_pub_key[key_length];
-          memcpy(cert_pub_key, cert_nonce.PublicKey_Signature, key_length);
+          memcpy(cert_pub_key, cert_nonce_pub_key_sig, key_length);
+          cout << "cert public key" << endl;
 
           char* cert_pub_key_data = cert_pub_key;
           char* sig_data = cert_sig;
 
           load_ca_public_key(ca_public_key_file);
           int ret = call_verify_cert(cert_pub_key_data, key_length, sig_data, key_length);
+          cout << "verify cert" << endl;
           if (ret == 0){
             cout << "please no" << endl;
             cerr << "server signature not verified" << endl;
@@ -218,11 +231,12 @@ int main(int argc, char *argv[]) {
           }
           load_peer_public_key(cert_pub_key, key_length);
           int ret_nonce = call_verify_nonce(client_hello.ClientNonce, 32, server_hello->ServerCertificate_ClientNonceSignature, server_hello->SigSize);
+          cout << "verify nonce" << endl;
           if (ret_nonce == 0){
             cerr << "client nonce not verified" << endl;
             exit(3);
           }
-          printf("we good and verified");
+          cout << "verified and good" << endl;
           create_key_exchange = false;
         }
       }
