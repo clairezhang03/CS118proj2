@@ -157,16 +157,14 @@ int main(int argc, char *argv[]) {
       printf("here2 ");
 
       //constructing and sending a ServerHello
-      struct ServerHello server_hello;
+      struct ServerHello* server_hello;
       cout << sizeof(server_hello) << endl;
       load_certificate(certificate_file);
       load_private_key(private_key_file);
       derive_public_key();
       //size_t server_hello_size = create_server_hello(&server_hello, comm_type, client_nonce, certificate_file, private_key_file);
 
-      server_hello = (ServerHello*)::operator new(40 + cert_size + sig_size);
-      char message[40 + cert_size + sig_size];
-
+      uint16_t c_size = htons(cert_size);
       char signature[EVP_PKEY_size(ec_priv_key)];
       size_t sig_size;
       if (ec_priv_key != NULL){
@@ -177,6 +175,10 @@ int main(int argc, char *argv[]) {
           cout << "exit early" << endl;
           exit(3);
       }
+      uint8_t s_size = sig_size;
+
+      server_hello = (ServerHello*)::operator new(40 + cert_size + sig_size);
+      char message[40 + cert_size + sig_size];
 
       struct SecurityHeader header;
       header.MsgType = 2;
@@ -208,10 +210,8 @@ int main(int argc, char *argv[]) {
       memcpy(server_hello, message, sizeof(message));
 
 
-
-
       cout << sizeof(server_hello) << endl;
-      create_packet(&send_pkt, seq_num++, ack_num, (const char*)&server_hello, server_hello_size);
+      create_packet(&send_pkt, seq_num++, ack_num, (const char*)server_hello, sizeof(message));
       cout << "anything" << endl;
       sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
       printf("here5");
