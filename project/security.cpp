@@ -193,6 +193,13 @@ void write_int_to_buffer(char *buffer, int value, int size) {
     memcpy(buffer, &net_value, size);
 }
 
+void printHex(char* data, size_t length) {
+    for (size_t i = 0; i < length; ++i) {
+        printf("%02x ", static_cast<unsigned char>(data[i]));
+    }
+    printf("\n");
+}
+
 //helper function to create self-signed certificate
 // void create_self_signed_cert(struct Certificate* cert, size_t *cert_size) {
 //     //CHANGE
@@ -432,20 +439,20 @@ void create_data_message(struct DataMessage* data_message, uint16_t payload_size
 	// 3.	verify(certificate, certificate size, certificate_signature, certificate signature size, ec_ca_public_key)
 	// 2.	Verify the signature of client’s nonce: verify(client_nonce, 32 bytes, signature from server hello, signature size from server hello, ec_ca_public_key)
 	// 1.	If 0 —> not verified, terminate connection
-	// 4.	The client now uses Diffie-Hellman to create the shared secret encryption key. In client.cpp
-	// 1.	Create a private key for the client: generate_private_key()—> stored in ec_priv_key
-	// 2.	Create a public key for the client: derive_public_key() , needs to be done after generating private key
-	// 3.	load_peer_public_key(public key in certificate from server_hello) —> stores public key into ec_peer_public_key
-	// 4.	derive_secret() —> stores secret shared key into secret
-	// 5.	If comm_type is 1: derive_keys() —> get the MAC key, shared encryption key
-	// 5.	The client generates a temporary key pair and sends the key_exchange_request message, containing the client’s self-signed certificate. The server uses the certificate to generate the same shared secret key.
+// 4.	The client now uses Diffie-Hellman to create the shared secret encryption key. In client.cpp
+	    // 1.	Create a private key for the client: generate_private_key()—> stored in ec_priv_key
+	    // 2.	Create a public key for the client: derive_public_key() , needs to be done after generating private key
+	    // 3.	load_peer_public_key(public key in certificate from server_hello) —> stores public key into ec_peer_public_key
+	    // 4.	derive_secret() —> stores secret shared key into secret
+	    // 5.	If comm_type is 1: derive_keys() —> get the MAC key, shared encryption key
+// 5.	The client generates a temporary key pair and sends the key_exchange_request message, containing the client’s self-signed certificate. The server uses the certificate to generate the same shared secret key.
 	// 1.	Generate a client certificate: use public key that it generated + signature which is the public key signed by the private key
-	// 1.	Use the sign function
-	// 2.	Use sign function to sign server’s nonce()
-	// 3.	Send to server
-	// 6.	The server sends a finished message, containing no payload. In server.cpp
-	// 1.	(Don’t need to verify client’s nonce because it’s not tested)
-	// 2.	Load in private key file of server: load_private_key(private_key_file)<— this will be stored in ec_priv_key
+	    // 1.	Use the sign function
+	    // 2.	Use sign function to sign server’s nonce()
+	    // 3.	Send to server
+// 6.	The server sends a finished message, containing no payload. In server.cpp
+	    // 1.	(Don’t need to verify client’s nonce because it’s not tested)
+	    // 2.	Load in private key file of server: load_private_key(private_key_file)<— this will be stored in ec_priv_key
 	// 3.	load_peer_public_key(client’s public key from key_exchange_request)
 	// 4.	derive_secret() —> server now knows the secret
 	// 5.	If comm_type : 1 derive_keys() —> get the MAC key, shared encryption key
@@ -453,3 +460,4 @@ void create_data_message(struct DataMessage* data_message, uint16_t payload_size
 	// 1.	Now send messages by using encrypt()
 	// 2.	Receive messages using decrypt()
 	// 3.	Call clean_up at the end()
+    //CALL HMAC NOT WITH 32

@@ -202,6 +202,7 @@ int main(int argc, char *argv[]) {
 
       cout << cert_size << endl;
       memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
+      printHex(message, sizeof(message));
       cout << sig_size << endl;
       cout << s_size << endl;
       memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
@@ -209,15 +210,21 @@ int main(int argc, char *argv[]) {
       cout << sizeof(message) << endl;
       memcpy(server_hello, message, sizeof(message));
 
+      printHex(signature, sig_size);
+
 
       cout << sizeof(server_hello) << endl;
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)server_hello, sizeof(message));
       cout << "anything" << endl;
       sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
-      printf("here5");
       start_timer();
 
       bool waiting_key_exchange = true;
+      bool creating_finish = false;
+
+      struct KeyExchangeRequest* key_exchange;
+
+      server_hello = (ServerHello*)::operator new(payload_size);
 
       while(true){ //CHANGE TO VARIABLE
         if (waiting_key_exchange){
@@ -232,7 +239,25 @@ int main(int argc, char *argv[]) {
           bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
           if (bytes_recvd > 0) {
             //receive key exchange
+            uint16_t payload_size = ntohs(received_pkt.payload_size);
+            key_exchange = (KeyExchangeRequest*)::operator new(payload_size);
+
+            memcpy(key_exchange, received_pkt.payload, payload_size);
+            uint8_t msg_type = key_exchange->Header.MsgType;
+            if (msg_type != 16){
+              cerr << "wrong message type received" << endl;
+              exit(3);
+            }
+
+            printf("MsgType: %u\n", key_exchange->Header.MsgType);
+            waiting_key_exchange = false;
+            creating_finish = true;
           }
+        } else if (creating_finish){
+          uint16_t cert_size_key_exchange = ntohs(key_exchange->CertSize);
+
+          
+
         }
       }
 

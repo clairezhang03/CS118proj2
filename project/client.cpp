@@ -126,7 +126,11 @@ int main(int argc, char *argv[]) {
     //************************************************//
     // HANDLE SECURITY HANDSHAKE HERE
     if (use_security == 1){
-      generate_private_key(); //fills private key information
+      generate_private_key();
+
+      derive_public_key();
+      cout << "pub" << endl;
+
 
       struct ClientHello client_hello;
       create_client_hello(&client_hello, 1);
@@ -155,7 +159,6 @@ int main(int argc, char *argv[]) {
           int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
           if (bytes_recvd > 0) {
             //receive server hello
-            waiting_server_hello = false;
 
             uint16_t payload_size = ntohs(received_pkt.payload_size);
             if (payload_size >= sizeof(struct ServerHello)) {
@@ -164,6 +167,12 @@ int main(int argc, char *argv[]) {
                 cout << sizeof(server_hello) << endl;
                 cout << payload_size << endl;
                 memcpy(server_hello, received_pkt.payload, payload_size);
+
+                // char server_hello_msg[payload_size];
+                // memcpy(server_hello_msg, server_hello, payload_size);
+
+                // printHex(server_hello_msg, payload_size);
+
                 // Access the fields of server_hello
                 printf("MsgType: %u\n", server_hello->Header.MsgType);
                 // printf("CommType: %u\n", server_hello->CommType);
@@ -207,11 +216,11 @@ int main(int argc, char *argv[]) {
 
 
           uint16_t key_length = ntohs(cert_nonce->KeyLength);
-          // cout << key_length << endl;
+          //cout << key_length << endl;
           char cert_sig[cert_size - 4 - key_length];
           // cout << cert_nonce->PublicKey_Signature << endl;
           char* cert_nonce_pub_key_sig = cert_nonce->PublicKey_Signature;
-          memcpy(&cert_sig, cert_nonce_pub_key_sig + key_length, cert_size - 4 - key_length);
+          memcpy(cert_sig, cert_nonce_pub_key_sig + key_length, cert_size - 4 - key_length);
           cout << "cert_sig" << endl;
 
           char cert_pub_key[key_length];
@@ -219,24 +228,104 @@ int main(int argc, char *argv[]) {
           cout << "cert public key" << endl;
 
           char* cert_pub_key_data = cert_pub_key;
+          cout << "pubkey" << endl;
+          printHex(cert_pub_key, key_length);
           char* sig_data = cert_sig;
+          cout << "cert sig" << endl;
+          printHex(cert_sig, cert_size - 4 - key_length);
 
           load_ca_public_key(ca_public_key_file);
-          int ret = call_verify_cert(cert_pub_key_data, key_length, sig_data, key_length);
+          // int ret = call_verify_cert(cert_pub_key_data, key_length, sig_data, key_length);
+          int ret = verify(cert_pub_key_data, key_length, sig_data, cert_size - 4 - key_length, ec_ca_public_key);
           cout << "verify cert" << endl;
-          if (ret == 0){
+          if (ret != 1){
             cout << "please no" << endl;
             cerr << "server signature not verified" << endl;
             exit(3);
           }
           load_peer_public_key(cert_pub_key, key_length);
-          int ret_nonce = call_verify_nonce(client_hello.ClientNonce, 32, server_hello->ServerCertificate_ClientNonceSignature, server_hello->SigSize);
+
+          char* client_nonce_sig_data = client_nonce_sig;
+          int ret_nonce = call_verify_nonce(client_hello.ClientNonce, 32, client_nonce_sig_data, server_hello->SigSize);
           cout << "verify nonce" << endl;
-          if (ret_nonce == 0){
+          if (ret_nonce != 1){
             cerr << "client nonce not verified" << endl;
             exit(3);
           }
           cout << "verified and good" << endl;
+
+          derive_secret();
+
+          if (server_hello->CommType ==  1){
+            derive_keys();
+          }
+
+          //create keyexchange request
+
+          //sign the client's public key
+          char client_cert_signature[255]; //am i ALLOCATING the CORRECT SIZE?
+          size_t client_cert_sig_size = sign(public_key, pub_key_size, client_cert_signature);
+          cout << "client cert signed" << endl;
+
+          uint16_t zero = 0;
+
+          struct Certificate* client_cert = (Certificate*)::operator new(4 + pub_key_size + client_cert_sig_size);
+          char client_cert_message[4 + pub_key_size + client_cert_sig_size];
+
+          memcpy(client_cert_message, &pub_key_size, sizeof(uint16_t));
+
+          memcpy(client_cert_message + sizeof(uint16_t), &zero, sizeof(uint16_t));
+
+          // char pub_key_no_ptr = &public_key;
+          memcpy(client_cert_message + sizeof(uint16_t) + sizeof(uint16_t), public_key, pub_key_size);
+
+          memcpy(client_cert_message + sizeof(uint16_t) + sizeof(uint16_t) + pub_key_size, &client_cert_signature, client_cert_sig_size);
+          //client_cert created here
+          memcpy(client_cert, client_cert_message, sizeof(client_cert_message));
+
+          char* server_nonce = server_hello->ServerNonce;
+          char signature[255];
+          size_t sig_size_nonce;
+          if (ec_priv_key != NULL){
+              sig_size_nonce = sign(server_nonce, 32, signature);
+              cout << "not exit early" << endl;
+          }
+          else{
+              cerr << "exit early" << endl;
+              exit(3);
+          }
+
+          uint8_t s_size = sig_size_nonce;
+
+          struct KeyExchangeRequest* key_exchange = (KeyExchangeRequest*)::operator new(8 + sizeof(client_cert_message) + sig_size);
+          char message[8 + sizeof(client_cert_message) + sig_size];
+
+          struct SecurityHeader header;
+          header.MsgType = 16;
+          header.Padding = 0;
+          header.MsgLen = htons(4 + sizeof(client_cert_message) + sig_size); //CHECK?
+
+          memcpy(message, &header, sizeof(header));
+
+          uint8_t zero_8 = 0;
+          memcpy(message + sizeof(header), &zero_8, sizeof(uint8_t));
+
+          memcpy(message + sizeof(header) + sizeof(uint8_t), &sig_size, sizeof(s_size));
+
+          size_t client_cert_message_size = sizeof(client_cert_message);
+          memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size), &client_cert_message_size, sizeof(uint16_t)); //CHECK
+
+          memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t), &client_cert_message, sizeof(client_cert_message));
+
+          memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t) + sizeof(client_cert_message), &signature, sig_size_nonce);
+
+          memcpy(key_exchange, message, sizeof(message));
+          cout << "MOM WE MADE IT" << endl;
+
+          create_packet(&send_pkt, seq_num++, ack_num, (const char*)key_exchange, sizeof(message));
+          sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+          start_timer();
+
           create_key_exchange = false;
         }
       }

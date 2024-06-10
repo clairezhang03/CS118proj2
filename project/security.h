@@ -96,6 +96,7 @@ void hmac(char* data, size_t size, char* digest);
 void clean_up();
 
 // Additional helper functions
+void printHex(char* data, size_t length);
 void create_self_signed_cert(Certificate* cert, size_t *cert_size);
 void create_client_hello(ClientHello* client_hello, uint8_t comm_type);
 void parse_certificate(char* cert_data, struct Certificate* cert, uint16_t size);
