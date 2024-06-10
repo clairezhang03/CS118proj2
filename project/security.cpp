@@ -453,10 +453,10 @@ void create_data_message(struct DataMessage* data_message, uint16_t payload_size
 // 6.	The server sends a finished message, containing no payload. In server.cpp
 	    // 1.	(Don’t need to verify client’s nonce because it’s not tested)
 	    // 2.	Load in private key file of server: load_private_key(private_key_file)<— this will be stored in ec_priv_key
-	// 3.	load_peer_public_key(client’s public key from key_exchange_request)
-	// 4.	derive_secret() —> server now knows the secret
-	// 5.	If comm_type : 1 derive_keys() —> get the MAC key, shared encryption key
-	// 7.	Both sides can now start transmitting data messages, containing encrypted application layer data. Each data message must be encrypted using the shared secret obtained with Diffie-Hellman.
+	    // 3.	load_peer_public_key(client’s public key from key_exchange_request)
+	    // 4.	derive_secret() —> server now knows the secret
+	    // 5.	If comm_type : 1 derive_keys() —> get the MAC key, shared encryption key
+// 7.	Both sides can now start transmitting data messages, containing encrypted application layer data. Each data message must be encrypted using the shared secret obtained with Diffie-Hellman.
 	// 1.	Now send messages by using encrypt()
 	// 2.	Receive messages using decrypt()
 	// 3.	Call clean_up at the end()

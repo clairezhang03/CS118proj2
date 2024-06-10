@@ -224,8 +224,6 @@ int main(int argc, char *argv[]) {
 
       struct KeyExchangeRequest* key_exchange;
 
-      server_hello = (ServerHello*)::operator new(payload_size);
-
       while(true){ //CHANGE TO VARIABLE
         if (waiting_key_exchange){
 
@@ -249,6 +247,10 @@ int main(int argc, char *argv[]) {
               exit(3);
             }
 
+            //update expected for receive buffer
+            client_packet_expected++;
+            ack_num = client_packet_expected - 1;
+
             printf("MsgType: %u\n", key_exchange->Header.MsgType);
             waiting_key_exchange = false;
             creating_finish = true;
@@ -256,15 +258,64 @@ int main(int argc, char *argv[]) {
         } else if (creating_finish){
           uint16_t cert_size_key_exchange = ntohs(key_exchange->CertSize);
 
-          
+          char cert_ke[cert_size_key_exchange];
+          char* cert_sig_data = key_exchange->ClientCertificate_ServerNonceSignature;
 
+          memcpy(&cert_ke, cert_sig_data, cert_size);
+          cout <<"cert" << endl;
+
+          char* cert_data = cert_ke;
+
+          struct Certificate* cert_ke_cert = (Certificate*)::operator new(cert_size_key_exchange);
+          memcpy(cert_ke_cert, cert_data, cert_size_key_exchange);
+          cout << "parse cert" << endl;
+
+          uint16_t key_length_ke = ntohs(cert_ke_cert->KeyLength);
+
+          char* cert_ke_cert_pub_key_sig = cert_ke_cert->PublicKey_Signature;
+          char cert_ke_pub_key[key_length_ke];
+          memcpy(cert_ke_pub_key, cert_ke_cert_pub_key_sig, key_length_ke);
+          cout << "cert public key" << endl;
+
+          load_peer_public_key(cert_ke_pub_key, key_length_ke);
+          cout << "load public key" << endl;
+
+          derive_secret();
+          cout << "derived secret" << endl;
+
+          if (comm_type ==  1){
+            derive_keys();
+          }
+          
+          struct SecurityHeader finish_message;
+          finish_message.MsgType = 20;
+          finish_message.Padding = 0;
+          finish_message.MsgLen = 0;
+
+          create_packet(&send_pkt, seq_num++, ack_num, (const char*)&finish_message, sizeof(finish_message));
+          cout << "anything" << endl;
+          sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+          start_timer();
+
+          creating_finish = false;
+          break;
         }
       }
 
-
+      int bytes_recvd = -1;
+      while(bytes_recvd < 0){
+        //resubmission
+        if(timer_on && timer_expired()){
+            //resend finishmessage
+            sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+            start_timer();
+        }
+        bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
+      }
     }
 
-
+    //************************************************//
+    //************************************************//
 
     first_packet = true;
     // Received packet must be data, not an ACK
@@ -306,12 +357,14 @@ int main(int argc, char *argv[]) {
     while(true){
       // 1. Check if timer expired --> retransmit
       if(timer_on && timer_expired()){
-        // cout << "Timer expired" << endl;
-        // Retransmit lowest unACK'd packet to be sent
-        Packet lowest_unACK_pkt = send_packets_buff.at(received_cum_ack + 1);
-        // cout << "Resending: " << lowest_unACK_pkt.packet_number << endl;
-        sendto(serv_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
-        start_timer();
+        if (received_cum_ack + 1 < send_packets_buff.size()){
+          // cout << "Timer expired" << endl;
+          // Retransmit lowest unACK'd packet to be sent
+          Packet lowest_unACK_pkt = send_packets_buff.at(received_cum_ack + 1);
+          // cout << "Resending: " << lowest_unACK_pkt.packet_number << endl;
+          sendto(serv_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+          start_timer();
+        }
       }
 
       // 2. Listen for data from clients

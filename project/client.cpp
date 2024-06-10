@@ -125,6 +125,8 @@ int main(int argc, char *argv[]) {
     //************************************************//
     //************************************************//
     // HANDLE SECURITY HANDSHAKE HERE
+    uint8_t comm_type = 0;
+
     if (use_security == 1){
       generate_private_key();
 
@@ -133,7 +135,7 @@ int main(int argc, char *argv[]) {
 
 
       struct ClientHello client_hello;
-      create_client_hello(&client_hello, 1);
+      create_client_hello(&client_hello, 1); //CHANGE? to comm_type
 
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)&client_hello, sizeof(client_hello));
       sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
@@ -141,8 +143,10 @@ int main(int argc, char *argv[]) {
 
       bool waiting_server_hello = true;
       bool create_key_exchange = false;
+      bool waiting_finish_message = false;
 
       struct ServerHello* server_hello;
+      struct SecurityHeader* finish_message; 
 
       while(true){ //CHANGE TO VARIABLE
       
@@ -214,7 +218,6 @@ int main(int argc, char *argv[]) {
           cout << "parse cert" << endl;
 
 
-
           uint16_t key_length = ntohs(cert_nonce->KeyLength);
           //cout << key_length << endl;
           char cert_sig[cert_size - 4 - key_length];
@@ -256,6 +259,8 @@ int main(int argc, char *argv[]) {
 
           derive_secret();
 
+          comm_type = server_hello->CommType;
+
           if (server_hello->CommType ==  1){
             derive_keys();
           }
@@ -282,12 +287,15 @@ int main(int argc, char *argv[]) {
           memcpy(client_cert_message + sizeof(uint16_t) + sizeof(uint16_t) + pub_key_size, &client_cert_signature, client_cert_sig_size);
           //client_cert created here
           memcpy(client_cert, client_cert_message, sizeof(client_cert_message));
+          cout << "pub_key_size " << pub_key_size << endl;
+          cout << "client cert sig size " << client_cert_sig_size << endl;
+          cout << "size of whole client cert " << sizeof(client_cert_message) << endl;
 
           char* server_nonce = server_hello->ServerNonce;
-          char signature[255];
+          char signature_nonce[255];
           size_t sig_size_nonce;
           if (ec_priv_key != NULL){
-              sig_size_nonce = sign(server_nonce, 32, signature);
+              sig_size_nonce = sign(server_nonce, 32, signature_nonce);
               cout << "not exit early" << endl;
           }
           else{
@@ -297,13 +305,13 @@ int main(int argc, char *argv[]) {
 
           uint8_t s_size = sig_size_nonce;
 
-          struct KeyExchangeRequest* key_exchange = (KeyExchangeRequest*)::operator new(8 + sizeof(client_cert_message) + sig_size);
-          char message[8 + sizeof(client_cert_message) + sig_size];
+          struct KeyExchangeRequest* key_exchange = (KeyExchangeRequest*)::operator new(8 + sizeof(client_cert_message) + sig_size_nonce);
+          char message[8 + sizeof(client_cert_message) + sig_size_nonce];
 
           struct SecurityHeader header;
           header.MsgType = 16;
           header.Padding = 0;
-          header.MsgLen = htons(4 + sizeof(client_cert_message) + sig_size); //CHECK?
+          header.MsgLen = htons(4 + sizeof(client_cert_message) + sig_size_nonce); //CHECK?
 
           memcpy(message, &header, sizeof(header));
 
@@ -316,10 +324,17 @@ int main(int argc, char *argv[]) {
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size), &client_cert_message_size, sizeof(uint16_t)); //CHECK
 
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t), &client_cert_message, sizeof(client_cert_message));
+          cout << "before" << endl;
+          cout << "1 client_cert_message_size " << sizeof(client_cert_message) << endl;
+          cout << "1 sig size server nonce " << sig_size_nonce << endl;
+          cout << "key exchange message size before signature " << sizeof(message) << endl;
 
-          memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t) + sizeof(client_cert_message), &signature, sig_size_nonce);
+          memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t) + sizeof(client_cert_message), &signature_nonce, sig_size_nonce);
 
           memcpy(key_exchange, message, sizeof(message));
+          cout << "client_cert_message_size " << sizeof(client_cert_message) << endl;
+          cout << "sig size server nonce " << sig_size_nonce << endl;
+          cout << "key exchange message size " << sizeof(message) << endl;
           cout << "MOM WE MADE IT" << endl;
 
           create_packet(&send_pkt, seq_num++, ack_num, (const char*)key_exchange, sizeof(message));
@@ -327,9 +342,34 @@ int main(int argc, char *argv[]) {
           start_timer();
 
           create_key_exchange = false;
+          waiting_finish_message = true;
+        } else if (waiting_finish_message){
+
+          //retransmission
+          if(timer_on && timer_expired()){
+            //resend key_exchange
+            sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+            start_timer();
+          }
+
+          int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
+          if (bytes_recvd > 0) {
+            uint16_t payload_size = ntohs(received_pkt.payload_size);
+            finish_message = (struct SecurityHeader*)received_pkt.payload;
+
+            uint8_t msg_type = finish_message->MsgType;
+            printf("MsgType: %u\n", finish_message->MsgType);
+            if (msg_type != 20){
+              cerr << "wrong message type received" << endl;
+              exit(3);
+            }
+            //update expected for receive buffer
+            client_packet_expected++;
+            ack_num = client_packet_expected - 1;
+            break;
+          }
         }
       }
-
     }
 
     //================================================//
@@ -338,12 +378,14 @@ int main(int argc, char *argv[]) {
     while(true){
       // 1. Check if timer expired --> retransmit
       if(timer_on && timer_expired()){
-        // cout << "timer expired" << endl;
-        // Retransmit lowest unACK'd packet to be sent
-        Packet lowest_unACK_pkt = send_packets_buff.at(received_cum_ack + 1);
-        // cout << "resending: " << lowest_unACK_pkt.packet_number << endl;
-        sendto(client_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
-        start_timer();
+        if (received_cum_ack + 1 < send_packets_buff.size()){
+          // cout << "timer expired" << endl;
+          // Retransmit lowest unACK'd packet to be sent
+          Packet lowest_unACK_pkt = send_packets_buff.at(received_cum_ack + 1);
+          // cout << "resending: " << lowest_unACK_pkt.packet_number << endl;
+          sendto(client_sockfd, &lowest_unACK_pkt, sizeof(lowest_unACK_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+          start_timer();
+        }
       }
 
       // 2. Listen for data from clients
