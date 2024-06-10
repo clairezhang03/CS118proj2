@@ -104,4 +104,5 @@ size_t create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, 
 int call_verify_cert(char* data, size_t size, char* signature, uint16_t key_length);
 int call_verify_nonce(char* data, size_t size, char* signature, uint8_t sig_size);
 void create_key_exchange_request(KeyExchangeRequest* key_exchange, char *server_nonce);
-void create_data_message(DataMessage* data_message, uint16_t payload_size, char *payload, int using_mac);
+uint16_t create_data_message(DataMessage* data_message, unsigned int bytes_read, char* payload_buff, int using_mac);
+void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ack_num, char* payload_buff, unsigned int bytes_read, int using_mac);

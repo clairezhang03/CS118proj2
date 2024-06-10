@@ -7,6 +7,8 @@
 #include <iostream>
 #include <stdio.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "security.h"
 #include "utils.h"
 
@@ -338,82 +340,109 @@ void create_key_exchange_request(struct KeyExchangeRequest* key_exchange, char *
 }
 
 //Data message
-void create_data_message(struct DataMessage* data_message, uint16_t payload_size, char *payload, int using_mac) {
-    data_message->PayloadSize = htons(payload_size);
-    data_message->Padding = 0;
+uint16_t create_data_message(struct DataMessage* data_message, unsigned int bytes_read, char* payload_buff, int using_mac) {
+    /*
+    Data Message
+        struct SecurityHeader Header; // 1 bytes
+        uint16_t PayloadSize;  // Payload + Padding = 1 bytes
+        uint16_t Padding; 
+        char IV[IV_SIZE]; // 16 bytes
+        char payload[DATA_MESSAGE_MSS]; // 1024 - 18 = 1006
+    */
 
-    char iv[IV_SIZE];
-    char encrypted_payload[payload_size]; 
-    //note: padded data size can be up to AES_BLOCK_SIZE bytes larger than input data size
-    size_t encrypted_payload_size = encrypt_data(payload, payload_size, iv, encrypted_payload, using_mac);
-    memcpy(data_message->IV, iv, IV_SIZE);
-    memcpy(data_message->payload, encrypted_payload, encrypted_payload_size);
+    // 1. Encrypt the data 
+    char iv [16];
+    char cipher_text[MSS]; 
 
-    //compute HMAC -- if using mac
-    char mac[MAC_SIZE];
-    if (using_mac) {
-        char *mac_data = (char *)malloc(IV_SIZE + encrypted_payload_size);
-        memcpy(mac_data, iv, IV_SIZE);
-        memcpy(mac_data + IV_SIZE, encrypted_payload, encrypted_payload_size);
-        hmac(mac_data, IV_SIZE + encrypted_payload_size, mac);
-        free(mac_data);
-        memcpy(data_message->MACcode, mac, MAC_SIZE);
-    }
+    // size_t encrypt_data(char *data, size_t size, char *iv, char *cipher, int using_mac); buffers cipher, iv have the results
+    size_t encrypted_payload_size = encrypt_data(payload_buff, bytes_read, iv, cipher_text, using_mac);
+    // cout << "payload size = " << encrypted_payload_size << endl;
 
+    // 2. Create Security Header
     struct SecurityHeader header;
     header.MsgType = 255;
     header.Padding = 0;
-    if (using_mac){
-        header.MsgLen = htons(52 + payload_size); //CHECK
-    }
-    else{
-        header.MsgLen = htons(20 + payload_size); //CHECK
-    }
+
+    //( payload size + padding) (1 byte) + IV (16 bytes) = 17 bytes
+    if (using_mac)
+        header.MsgLen = htons(17 + encrypted_payload_size + 32); 
+    else
+        header.MsgLen = htons(17 + encrypted_payload_size);
     data_message->Header = header;
+
+    // 2. Copy over IV and encrypted payload
+    data_message->PayloadSize = htons(encrypted_payload_size);
+    data_message->Padding = 0;
+    memcpy(data_message->IV, iv, IV_SIZE);
+    memcpy(data_message->payload, cipher_text, encrypted_payload_size);
+
+    // 3. Add in the MAC-code if using mac is on
+    if(using_mac){
+        char digest[32];
+        hmac(data_message->payload, ntohs(data_message->PayloadSize), digest);
+        // hmac(cipher_text, encrypted_payload_size, digest);
+         printf("**********************\n");
+        printf("**********************\n");
+        printf("Ciphertext: ");
+        printHex(data_message->payload, ntohs(data_message->PayloadSize));
+        cout << "\nPayload size: " << ntohs(data_message->PayloadSize) << endl;
+        cout.flush();
+        printf("**********************\n");
+        printf("**********************\n");
+
+        memcpy(data_message->payload + encrypted_payload_size, digest, 32);
+        printf("MAC code: ");
+        printHex(digest, 32);
+    }
+    printf("Ciphertext:");
+    printHex(data_message->payload, ntohs(data_message->PayloadSize));
+
+    // TODO: change to dm -> to check for other fields
+    char decrypted_text[MSS];
+    printf("IV: ");
+    printHex(data_message->IV, 16);
+    size_t decrypted_cipher_size = decrypt_cipher(data_message->payload, ntohs(data_message->PayloadSize), data_message->IV, decrypted_text, using_mac);
+    printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
+    cout.flush();
+
+    // security header + (payload size & padding) + iv + payload
+    int data_message_size = 24 + encrypted_payload_size;
+    return using_mac ? data_message_size + 32 : data_message_size;
 }
 
-//fun test implementation
-// Implement the main logic to simulate the protocol
-// int main() {
-//     // Step 1: Generate private key and derive public key
-//     generate_private_key();
-//     derive_public_key();
+void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned short ack_num, char* payload_buff, unsigned int bytes_read, int using_mac){
+    pkt->packet_number = htonl(seq_num);
+    pkt->ack_number = htonl(ack_num); // This can be set to some relevant value
+    pkt->padding = htons(0); 
 
-//     // Step 2: Client generates ClientHello message
-//     char *client_hello;
-//     size_t client_hello_size;
-//     create_client_hello(&client_hello, &client_hello_size, 1);
+    //1. Create a data message struct
+    struct DataMessage data_message;
+    uint16_t data_message_size = create_data_message(&data_message, bytes_read, payload_buff, using_mac);
 
-//     // Step 3: Server generates ServerHello message
-//     char *server_hello;
-//     size_t server_hello_size;
-//     create_server_hello(&server_hello, &server_hello_size, 1, client_hello + 4, 32);
+    pkt->payload_size = htons(data_message_size); // either size 1024 or less
 
-//     // Step 4: Client generates KeyExchangeRequest message
-//     char *key_exchange_request;
-//     size_t key_exchange_request_size;
-//     create_key_exchange_request(&key_exchange_request, &key_exchange_request_size, server_hello + 4, 32);
+    // Copy the DataMessage to the Packet payload
+    memcpy(pkt->payload, &data_message, sizeof(data_message));
 
-//     // Step 5: Derive shared secret and keys
-//     load_peer_public_key(server_hello + 36, server_hello_size - 36);
-//     derive_secret();
-//     derive_keys();
+    DataMessage* dm = (DataMessage*) (&(pkt->payload));
+    // char decrypted_text[MSS];
+    // size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, decrypted_text, using_mac);
+    // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
+    // cout.flush();
 
-//     // Step 6: Client sends encrypted data
-//     char *data = "Hello, secure world!";
-//     char *data_message;
-//     size_t data_message_size;
-//     create_data_message(&data_message, &data_message_size, data, strlen(data), 1);
+    char decrypted_text[MSS];
+    printf("Ciphertext: ");
+    printHex(dm->payload, ntohs(dm->PayloadSize));
+    printf("IV: ");
+    printHex(dm->IV, 16);
+    printf("MAC code: ");
+    printHex(dm->payload + ntohs(dm->PayloadSize), 32);
+    
+    size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, decrypted_text, using_mac);
+    printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
+    cout.flush();
+}
 
-//     // Clean up
-//     free(client_hello);
-//     free(server_hello);
-//     free(key_exchange_request);
-//     free(data_message);
-//     clean_up();
-
-//     return 0;
-// }
 
 //plan:
 

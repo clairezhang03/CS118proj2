@@ -9,7 +9,12 @@
 
 #define CWND_SIZE 20
 #define MSS 1024
-// #define MAX_BUFFER_SIZE 2048000 //1024 * 2000
+#define SECURITY_MSS 900
+#define DATA_MESSAGE_MSS 1000
+#define SECRET_SIZE 32
+#define IV_SIZE 16
+#define MAC_SIZE 32
+
 
 #define CLIENT_PORT 6016
 #define LOCAL_HOST "127.0.0.1"
