@@ -34,8 +34,7 @@ struct SecurityHeader {
 struct Certificate {
     uint16_t KeyLength;
     uint16_t Padding;
-    char* PublicKey;
-    char* Signature; // 70 - 72 bytes, always less than 255 but should be any
+    char PublicKey_Signature[]; // 70 - 72 bytes, always less than 255 but should be any
 };
 
 struct ClientHello {
@@ -51,8 +50,7 @@ struct ServerHello {
     uint8_t SigSize;
     uint16_t CertSize;
     char ServerNonce[32]; // always exactly 32 bytes --> change to a *?
-    struct Certificate ServerCertificate;
-    char* ClientNonceSignature;
+    char ServerCertificate_ClientNonceSignature[];
 };
 
 struct KeyExchangeRequest {
@@ -60,8 +58,7 @@ struct KeyExchangeRequest {
     uint8_t Padding;
     uint8_t SigSize;
     uint16_t CertSize;
-    struct Certificate ClientCertificate;
-    char* ServerNonceSignature;
+    char ClientCertificate_ServerNonceSignature[];
 };
 
 struct DataMessage {

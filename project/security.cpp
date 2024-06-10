@@ -131,7 +131,7 @@ int verify(char* data, size_t size, char* signature, size_t sig_size, EVP_PKEY* 
     ret = EVP_DigestVerifyFinal(mdctx, (unsigned char*)signature, sig_size);
 
     EVP_MD_CTX_free(mdctx);
-    return ret == 1;
+    return ret;
 }
 
 void generate_nonce(char* buf, int size) {
@@ -194,20 +194,20 @@ void write_int_to_buffer(char *buffer, int value, int size) {
 }
 
 //helper function to create self-signed certificate
-void create_self_signed_cert(struct Certificate* cert, size_t *cert_size) {
-    //CHANGE
-    cert->KeyLength = htons(pub_key_size); // cast?
-    cert->Padding = htons(0);
-    cert->PublicKey = public_key;
+// void create_self_signed_cert(struct Certificate* cert, size_t *cert_size) {
+//     //CHANGE
+//     cert->KeyLength = htons(pub_key_size); // cast?
+//     cert->Padding = htons(0);
+//     cert->PublicKey = public_key;
 
-    //sign the public key
-    char signature[255];
-    size_t sig_size = sign(public_key, pub_key_size, signature);
-    memcpy(cert->Signature, signature, sig_size);
+//     //sign the public key
+//     char signature[255];
+//     size_t sig_size = sign(public_key, pub_key_size, signature);
+//     memcpy(cert->Signature, signature, sig_size);
 
-    // *cert_size = 4 + pub_key_size + sig_size;
-    *cert_size = sizeof(&cert);
-}
+//     // *cert_size = 4 + pub_key_size + sig_size;
+//     *cert_size = sizeof(&cert);
+// }
 
 // ClientHello message
 void create_client_hello(struct ClientHello* client_hello, uint8_t comm_type) {
@@ -228,62 +228,28 @@ void create_client_hello(struct ClientHello* client_hello, uint8_t comm_type) {
     memcpy(&client_hello->ClientNonce, client_nonce, 32);
 }
 
-void parse_certificate(char* cert_data, struct Certificate* cert){
+void parse_certificate(char* cert_data, struct Certificate* cert, uint16_t size){
+    // cout << size << endl;
+    cert_size = size;
 
-    cert->KeyLength = ntohs(*(uint16_t*)cert_data);
+    cert = (Certificate*)::operator new(cert_size);
+    // cert->KeyLength = ntohs(*(uint16_t*)cert_data);
     // cout << "key length" << cert->KeyLength << endl;
-    cert_data += sizeof(uint16_t);
+    // cert_data += sizeof(uint16_t);
 
-    cert->Padding = 0;
-    // cout << "padding" << cert->Padding << endl;
-    cert_data += sizeof(uint16_t);
+    // cert->Padding = 0;
+    // cert_data += sizeof(uint16_t);
 
-    cert->PublicKey = new char[cert->KeyLength];
-    memcpy(cert->PublicKey, cert_data, cert->KeyLength);
-    // cout << "pub key" << cert->PublicKey << endl;
-    cert_data += cert->KeyLength;
-
-    size_t signature_size = cert_size - 4 - cert->KeyLength;
-
-    cert->Signature = new char[signature_size];
-    memcpy(cert->Signature, cert_data, signature_size);
-    // cout << "sig" << cert->Signature << endl;
-
+    // char public_key_sig[cert_size - 4];
+    memcpy(cert, cert_data, cert_size);
+    // cert->PublicKey_Signature = public_key_sig;
 }
 
 //ServerHello message
-void create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce, char* certificate_file, char* private_key_file) {
+size_t create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce, char* certificate_file, char* private_key_file) {
 
-    server_hello->CommType = comm_type;
-    
-    char server_nonce[32];
-    generate_nonce(server_nonce, 32);
-    memcpy(&server_hello->ServerNonce, server_nonce, 32);
-    
-    //create server certificate
-    //CHANGE--> certificate buffer being passed in IS THE certificate
-    // load_certificate(certificate_file);
-    struct Certificate server_cert; //= (struct Certificate*)certificate; //Check Cast
-    //put certificate info into server_cert
-    if (certificate != NULL){
-        cout << "yes certificate" << endl;
-        parse_certificate(certificate, &server_cert);
-    }
-    else{
-        cout << "not certificate" << endl;
-        exit(3);
-    }
-
-    // size_t server_cert_size;
-    // create_self_signed_cert(&server_cert, &server_cert_size);
-
-
-    server_hello->CertSize = htons(cert_size);
-    server_hello->ServerCertificate = server_cert;
-
-    //sign client nonce
-    // load_private_key(private_key_file);
-
+    uint16_t c_size = htons(cert_size);
+    // uint16_t converted_cert_size = htons(cert_size);
     char signature[EVP_PKEY_size(ec_priv_key)];
     size_t sig_size;
     if (ec_priv_key != NULL){
@@ -294,39 +260,74 @@ void create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, ch
         cout << "exit early" << endl;
         exit(3);
     }
-    server_hello->ClientNonceSignature = signature;
-    server_hello->SigSize = sig_size;
-    // free(signature);
+
+    uint8_t s_size = sig_size;
+
+    server_hello = (ServerHello*)::operator new(40 + cert_size + sig_size);
+    char message[40 + cert_size + sig_size];
 
     struct SecurityHeader header;
     header.MsgType = 2;
     header.Padding = 0;
     header.MsgLen = htons(36 + sig_size + cert_size); //CHECK
-    server_hello->Header = header;
+    cout << sizeof(header) << endl;
+    
+    memcpy(message, &header, sizeof(header));
+
+    cout << sizeof(comm_type) << endl;
+    memcpy(message + sizeof(header), &comm_type, sizeof(comm_type));
+    cout << sizeof(s_size) << endl;
+    memcpy(message + sizeof(header) + sizeof(comm_type), &sig_size, sizeof(s_size));
+    cout << sizeof(c_size) << endl;
+    memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size), &c_size, sizeof(c_size));
+
+    char server_nonce[32];
+    generate_nonce(server_nonce, 32);
+    cout << sizeof(server_nonce) << endl;
+    memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size), &server_nonce, 32);
+
+    cout << cert_size << endl;
+    memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
+    cout << sig_size << endl;
+    cout << s_size << endl;
+    memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
+
+    cout << sizeof(message) << endl;
+    memcpy(server_hello, message, sizeof(message));
+
+    return sizeof(message);
+}
+
+int call_verify_cert(char* data, size_t size, char* signature, uint16_t key_length){
+    return verify(data, size, signature, cert_size - 4 - key_length, ec_ca_public_key);
+}
+
+int call_verify_nonce(char* data, size_t size, char* signature, uint8_t sig_size){
+    return verify(data, size, signature, sig_size, ec_peer_public_key);
 }
 
 //KeyExchangeRequest message
 void create_key_exchange_request(struct KeyExchangeRequest* key_exchange, char *server_nonce) {
     //create client certificate
-    key_exchange->Padding = 0;
+    // key_exchange->Padding = 0;
 
-    struct Certificate client_cert;
-    size_t client_cert_size;
-    create_self_signed_cert(&client_cert, &client_cert_size);
-    key_exchange->CertSize = htons(client_cert_size);
-    key_exchange->ClientCertificate = client_cert;
+    // struct Certificate client_cert;
+    // size_t client_cert_size;
+    // create_self_signed_cert(&client_cert, &client_cert_size);
+    // key_exchange->CertSize = htons(client_cert_size);
+    // key_exchange->ClientCertificate = client_cert;
 
-    //sign server nonce
-    char signature[255];
-    size_t sig_size = sign(server_nonce, 32, signature);
-    memcpy(key_exchange->ServerNonceSignature, signature, sig_size);
-    key_exchange->SigSize = sig_size;
+    // //sign server nonce
+    // char signature[255];
+    // size_t sig_size = sign(server_nonce, 32, signature);
+    // memcpy(key_exchange->ServerNonceSignature, signature, sig_size);
+    // key_exchange->SigSize = sig_size;
 
-    struct SecurityHeader header;
-    header.MsgType = 16;
-    header.Padding = 0;
-    header.MsgLen = htons(4 + sig_size + cert_size); //CHECK
-    key_exchange->Header = header;
+    // struct SecurityHeader header;
+    // header.MsgType = 16;
+    // header.Padding = 0;
+    // header.MsgLen = htons(4 + sig_size + cert_size); //CHECK
+    // key_exchange->Header = header;
 }
 
 //Data message
@@ -424,7 +425,7 @@ void create_data_message(struct DataMessage* data_message, uint16_t payload_size
 	// 1.	load_private_key(private_key_file)—> server’s private key will be stored in ec_priv_key (global variable in security.cpp). ec_priv_key will be used to sign the client’s nonce
 	// 2.	Extract client’s nonce from the payload
 	// 3.	Use signature_size = sign(client_nonce, 32 bytes, signature): You will have to pass in a char* signature that will store the signature. Use the returned signature_size in construction of server_hello
-	// 3.	The client must verify the signatures of the certificate and of the random number. If any signature is not valid, the connection must be terminated and the client exits. In client.cpp
+// 3.	The client must verify the signatures of the certificate and of the random number. If any signature is not valid, the connection must be terminated and the client exits. In client.cpp
 	// 1.	Verifying the certificate
 	// 1.	From server_hello, extract the certificate and extract the certificate signature
 	// 2.	load_ca_public_key(ca_public_key_file) —> public key of CA is now stored in ec_ca_public_key: will use this to decrypt the certificate (which contains its public key) the server sent/ use CA public key to decrypt the CA verified server’s public key

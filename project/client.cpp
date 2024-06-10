@@ -136,6 +136,7 @@ int main(int argc, char *argv[]) {
       start_timer();
 
       bool waiting_server_hello = true;
+      bool create_key_exchange = false;
 
       struct ServerHello* server_hello;
 
@@ -159,14 +160,16 @@ int main(int argc, char *argv[]) {
             uint16_t payload_size = ntohs(received_pkt.payload_size);
             if (payload_size >= sizeof(struct ServerHello)) {
                 // Cast the payload to a ServerHello struct
-                server_hello = (struct ServerHello*)received_pkt.payload;
-
+                server_hello = (ServerHello*)::operator new(payload_size);
+                cout << sizeof(server_hello) << endl;
+                cout << payload_size << endl;
+                memcpy(server_hello, received_pkt.payload, payload_size);
                 // Access the fields of server_hello
                 printf("MsgType: %u\n", server_hello->Header.MsgType);
-                printf("CommType: %u\n", server_hello->CommType);
-                printf("SigSize: %u\n", server_hello->SigSize);
-                printf("CertSize: %u\n", ntohs(server_hello->CertSize));
-                printf("ServerNonce: %.*s\n", 32, server_hello->ServerNonce);
+                // printf("CommType: %u\n", server_hello->CommType);
+                // printf("SigSize: %u\n", server_hello->SigSize);
+                // printf("CertSize: %u\n", ntohs(server_hello->CertSize));
+                // printf("ServerNonce: %.*s\n", 32, server_hello->ServerNonce);
                 // Assuming the Certificate structure has a printable field, e.g., data
                 //printf("ServerCertificate: %.*s\n", sizeof(server_hello->ServerCertificate), server_hello->ServerCertificate);
                 //printf("ClientNonceSignature: %.*s\n", sizeof(server_hello->ClientNonceSignature), server_hello->ClientNonceSignature);
@@ -176,7 +179,51 @@ int main(int argc, char *argv[]) {
             }
             client_packet_expected++;
             ack_num = client_packet_expected - 1;
+            waiting_server_hello = false;
+            create_key_exchange = true;
           }
+        } else if (create_key_exchange){
+          uint16_t cert_size = ntohs(server_hello->CertSize);
+          uint16_t sig_size = server_hello->SigSize;
+          // char cert_and_sig[cert_size + sig_size] = server_hello->ServerCertificate_ClientNonceSignature;
+          char cert[cert_size];
+          char client_nonce_sig[sig_size];
+
+          char* cert_sig_data = server_hello->ServerCertificate_ClientNonceSignature;
+
+          memcpy(&cert, cert_sig_data, cert_size);
+          memcpy(&client_nonce_sig, cert_sig_data + cert_size, sig_size);
+
+          char* cert_data = cert;
+
+          struct Certificate cert_nonce;
+          parse_certificate(cert_data, &cert_nonce, cert_size);
+
+          uint16_t key_length = cert_nonce.KeyLength;
+          char cert_sig[cert_size - 4 - key_length];
+          memcpy(cert_sig, cert_nonce.PublicKey_Signature + key_length, cert_size - 4 - key_length);
+
+          char cert_pub_key[key_length];
+          memcpy(cert_pub_key, cert_nonce.PublicKey_Signature, key_length);
+
+          char* cert_pub_key_data = cert_pub_key;
+          char* sig_data = cert_sig;
+
+          load_ca_public_key(ca_public_key_file);
+          int ret = call_verify_cert(cert_pub_key_data, key_length, sig_data, key_length);
+          if (ret == 0){
+            cout << "please no" << endl;
+            cerr << "server signature not verified" << endl;
+            exit(3);
+          }
+          load_peer_public_key(cert_pub_key, key_length);
+          int ret_nonce = call_verify_nonce(client_hello.ClientNonce, 32, server_hello->ServerCertificate_ClientNonceSignature, server_hello->SigSize);
+          if (ret_nonce == 0){
+            cerr << "client nonce not verified" << endl;
+            exit(3);
+          }
+          printf("we good and verified");
+          create_key_exchange = false;
         }
       }
 

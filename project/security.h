@@ -98,7 +98,9 @@ void clean_up();
 // Additional helper functions
 void create_self_signed_cert(Certificate* cert, size_t *cert_size);
 void create_client_hello(ClientHello* client_hello, uint8_t comm_type);
-void parse_certificate(char* cert_data, struct Certificate* cert);
-void create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce, char* certificate_file, char* private_key_file);
+void parse_certificate(char* cert_data, struct Certificate* cert, uint16_t size);
+size_t create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, char* client_nonce, char* certificate_file, char* private_key_file);
+int call_verify_cert(char* data, size_t size, char* signature, uint16_t key_length);
+int call_verify_nonce(char* data, size_t size, char* signature, uint8_t sig_size);
 void create_key_exchange_request(KeyExchangeRequest* key_exchange, char *server_nonce);
 void create_data_message(DataMessage* data_message, uint16_t payload_size, char *payload, int using_mac);

@@ -158,13 +158,61 @@ int main(int argc, char *argv[]) {
 
       //constructing and sending a ServerHello
       struct ServerHello server_hello;
+      cout << sizeof(server_hello) << endl;
       load_certificate(certificate_file);
       load_private_key(private_key_file);
       derive_public_key();
-      create_server_hello(&server_hello, comm_type, client_nonce, certificate_file, private_key_file);
-      printf("here3");
-      create_packet(&send_pkt, seq_num++, ack_num, (const char*)&server_hello, sizeof(server_hello));
-      printf("here4");
+      //size_t server_hello_size = create_server_hello(&server_hello, comm_type, client_nonce, certificate_file, private_key_file);
+
+      server_hello = (ServerHello*)::operator new(40 + cert_size + sig_size);
+      char message[40 + cert_size + sig_size];
+
+      char signature[EVP_PKEY_size(ec_priv_key)];
+      size_t sig_size;
+      if (ec_priv_key != NULL){
+          sig_size = sign(client_nonce, 32, signature);
+          cout << "not exit early" << endl;
+      }
+      else{
+          cout << "exit early" << endl;
+          exit(3);
+      }
+
+      struct SecurityHeader header;
+      header.MsgType = 2;
+      header.Padding = 0;
+      header.MsgLen = htons(36 + sig_size + cert_size); //CHECK
+      cout << sizeof(header) << endl;
+      
+      memcpy(message, &header, sizeof(header));
+
+      cout << sizeof(comm_type) << endl;
+      memcpy(message + sizeof(header), &comm_type, sizeof(comm_type));
+      cout << sizeof(s_size) << endl;
+      memcpy(message + sizeof(header) + sizeof(comm_type), &sig_size, sizeof(s_size));
+      cout << sizeof(c_size) << endl;
+      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size), &c_size, sizeof(c_size));
+
+      char server_nonce[32];
+      generate_nonce(server_nonce, 32);
+      cout << sizeof(server_nonce) << endl;
+      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size), &server_nonce, 32);
+
+      cout << cert_size << endl;
+      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
+      cout << sig_size << endl;
+      cout << s_size << endl;
+      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
+
+      cout << sizeof(message) << endl;
+      memcpy(server_hello, message, sizeof(message));
+
+
+
+
+      cout << sizeof(server_hello) << endl;
+      create_packet(&send_pkt, seq_num++, ack_num, (const char*)&server_hello, server_hello_size);
+      cout << "anything" << endl;
       sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
       printf("here5");
       start_timer();
