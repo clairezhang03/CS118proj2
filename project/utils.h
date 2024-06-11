@@ -67,13 +67,14 @@ struct KeyExchangeRequest {
 };
 
 struct DataMessage {
-    struct SecurityHeader Header;
-    uint16_t PayloadSize;
-    uint16_t Padding;
-    char IV[16];
-    char payload[MSS - 20];
-    uint8_t MACcode[32];
+    struct SecurityHeader Header; // 4 bytes
+    uint16_t PayloadSize;  // 2 bytes
+    uint16_t Padding; // 2 bytes
+    char IV[IV_SIZE]; // 16 bytes
+    char payload[DATA_MESSAGE_MSS]; // 1024 - 24 = 1000
+    // char MACcode[32]; // 32 bytes
 };
+
 
 // void print_packet(struct Packet* pkt){
 //     cout << "Packet Number: " << pkt->packet_number << endl;

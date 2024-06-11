@@ -405,11 +405,13 @@ uint16_t create_data_message(struct DataMessage* data_message, unsigned int byte
     // printf("IV: ");
     // printHex(data_message->IV, 16);
     size_t decrypted_cipher_size = decrypt_cipher(data_message->payload, ntohs(data_message->PayloadSize), data_message->IV, decrypted_text, using_mac);
+    cout << "decrypted_cipher_size: " << decrypted_cipher_size << endl;
     printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
     cout.flush();
 
     // security header + (payload size & padding) + iv + payload
     int data_message_size = 24 + encrypted_payload_size;
+    cout << "why" << endl;
     return using_mac ? data_message_size + 32 : data_message_size;
 }
 
@@ -426,7 +428,7 @@ void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned
     cout << "TWO" << endl;
     // Copy the DataMessage to the Packet payload
     memcpy(pkt->payload, &data_message, sizeof(data_message));
-     cout << "THREE" << endl
+    cout << "THREE" << endl;
 
     DataMessage* dm = (DataMessage*) (&(pkt->payload));
     // char decrypted_text[MSS];

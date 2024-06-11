@@ -243,7 +243,8 @@ int main(int argc, char *argv[]) {
             memcpy(key_exchange, received_pkt.payload, payload_size);
             uint8_t msg_type = key_exchange->Header.MsgType;
             if (msg_type != 16){
-              cerr << "wrong message type received" << endl;
+              cout << "message type: " << msg_type << endl;
+              cerr << "wrong message type received-- expected key exchange" << endl;
               exit(3);
             }
 
@@ -488,9 +489,10 @@ int main(int argc, char *argv[]) {
       //================================================//
       //================================================//
       // PART 2: STANDARD IN 
-      char std_in_buffer [MSS];
+      int buffer_size = use_security ? SECURITY_MSS : MSS;
+      char std_in_buffer [buffer_size];
       ssize_t bytes_read;
-      if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS)) > 0) {
+      if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, buffer_size)) > 0) {
          if(use_security){
            create_security_packet(&send_pkt, seq_num++, ack_num, std_in_buffer, bytes_read, using_mac);
         } else {
