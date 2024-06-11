@@ -132,7 +132,7 @@ int main(int argc, char *argv[]) {
       derive_public_key();
 
       struct ClientHello client_hello;
-      create_client_hello(&client_hello, 1); 
+      create_client_hello(&client_hello, 0); 
 
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)&client_hello, sizeof(client_hello));
       sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
