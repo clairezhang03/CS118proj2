@@ -368,7 +368,7 @@ int main(int argc, char *argv[]) {
 
               // 2. Calculate the mac code again
               char local_computed_mac[32];
-              hmac(dm->payload, ntohs(dm->PayloadSize), local_computed_mac);
+              hmac(dm->IV, ntohs(dm->PayloadSize) + 16, local_computed_mac);
               // printf("**********************\n");
               // printf("**********************\n");
               // printf("Ciphertext: ");

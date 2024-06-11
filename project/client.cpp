@@ -319,7 +319,7 @@ int main(int argc, char *argv[]) {
           uint8_t zero_8 = 0;
           memcpy(message + sizeof(header), &zero_8, sizeof(uint8_t));
 
-          memcpy(message + sizeof(header) + sizeof(uint8_t), &sig_size, sizeof(s_size));
+          memcpy(message + sizeof(header) + sizeof(uint8_t), &sig_size_nonce, sizeof(s_size));
 
           size_t client_cert_message_size = htons(sizeof(client_cert_message));
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size), &client_cert_message_size, sizeof(uint16_t)); //CHECK

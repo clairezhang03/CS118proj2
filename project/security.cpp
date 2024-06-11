@@ -379,7 +379,7 @@ uint16_t create_data_message(struct DataMessage* data_message, unsigned int byte
     // 3. Add in the MAC-code if using mac is on
     if(using_mac){
         char digest[32];
-        hmac(data_message->payload, ntohs(data_message->PayloadSize), digest);
+        hmac(data_message->IV, ntohs(data_message->PayloadSize) + 16, digest);
         // hmac(cipher_text, encrypted_payload_size, digest);
         //  printf("**********************\n");
         // printf("**********************\n");
