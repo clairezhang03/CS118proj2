@@ -263,10 +263,10 @@ size_t create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, 
     size_t sig_size;
     if (ec_priv_key != NULL){
         sig_size = sign(client_nonce, 32, signature);
-        cout << "not exit early" << endl;
+        //cout << "not exit early" << endl;
     }
     else{
-        cout << "exit early" << endl;
+        cerr << "exit early" << endl;
         exit(3);
     }
 
@@ -279,29 +279,29 @@ size_t create_server_hello(struct ServerHello* server_hello, uint8_t comm_type, 
     header.MsgType = 2;
     header.Padding = 0;
     header.MsgLen = htons(36 + sig_size + cert_size); //CHECK
-    cout << sizeof(header) << endl;
+   // cout << sizeof(header) << endl;
     
     memcpy(message, &header, sizeof(header));
 
-    cout << sizeof(comm_type) << endl;
+    // cout << sizeof(comm_type) << endl;
     memcpy(message + sizeof(header), &comm_type, sizeof(comm_type));
-    cout << sizeof(s_size) << endl;
+    // cout << sizeof(s_size) << endl;
     memcpy(message + sizeof(header) + sizeof(comm_type), &sig_size, sizeof(s_size));
-    cout << sizeof(c_size) << endl;
+    // cout << sizeof(c_size) << endl;
     memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size), &c_size, sizeof(c_size));
 
     char server_nonce[32];
     generate_nonce(server_nonce, 32);
-    cout << sizeof(server_nonce) << endl;
+    // cout << sizeof(server_nonce) << endl;
     memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size), &server_nonce, 32);
 
-    cout << cert_size << endl;
+    // cout << cert_size << endl;
     memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
-    cout << sig_size << endl;
-    cout << s_size << endl;
+    // cout << sig_size << endl;
+    // cout << s_size << endl;
     memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
 
-    cout << sizeof(message) << endl;
+    // cout << sizeof(message) << endl;
     memcpy(server_hello, message, sizeof(message));
 
     return sizeof(message);
@@ -385,22 +385,25 @@ uint16_t create_data_message(struct DataMessage* data_message, unsigned int byte
         printf("**********************\n");
         printf("Ciphertext: ");
         printHex(data_message->payload, ntohs(data_message->PayloadSize));
-        cout << "\nPayload size: " << ntohs(data_message->PayloadSize) << endl;
+        cout << "Payload size: " << ntohs(data_message->PayloadSize) << endl;
         cout.flush();
+        printf("MAC code: ");
+        printHex(digest, 32);
+        cout.flush();
+        printf("IV: ");
+        printHex(data_message->IV, 16);
         printf("**********************\n");
         printf("**********************\n");
 
         memcpy(data_message->payload + encrypted_payload_size, digest, 32);
-        printf("MAC code: ");
-        printHex(digest, 32);
     }
-    printf("Ciphertext:");
-    printHex(data_message->payload, ntohs(data_message->PayloadSize));
+    // printf("Ciphertext:");
+    // printHex(data_message->payload, ntohs(data_message->PayloadSize));
 
     // TODO: change to dm -> to check for other fields
     char decrypted_text[MSS];
-    printf("IV: ");
-    printHex(data_message->IV, 16);
+    // printf("IV: ");
+    // printHex(data_message->IV, 16);
     size_t decrypted_cipher_size = decrypt_cipher(data_message->payload, ntohs(data_message->PayloadSize), data_message->IV, decrypted_text, using_mac);
     printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
     cout.flush();
@@ -418,11 +421,12 @@ void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned
     //1. Create a data message struct
     struct DataMessage data_message;
     uint16_t data_message_size = create_data_message(&data_message, bytes_read, payload_buff, using_mac);
-
+    cout << "ONE" << endl;
     pkt->payload_size = htons(data_message_size); // either size 1024 or less
-
+    cout << "TWO" << endl;
     // Copy the DataMessage to the Packet payload
     memcpy(pkt->payload, &data_message, sizeof(data_message));
+     cout << "THREE" << endl
 
     DataMessage* dm = (DataMessage*) (&(pkt->payload));
     // char decrypted_text[MSS];
@@ -430,6 +434,7 @@ void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned
     // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
     // cout.flush();
 
+    cout << "I AM HERE " << endl;
     char decrypted_text[MSS];
     printf("Ciphertext: ");
     printHex(dm->payload, ntohs(dm->PayloadSize));

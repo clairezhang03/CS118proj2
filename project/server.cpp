@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
 
     //define packet expected number
     uint32_t client_packet_expected = 1;
-    cout << "here26" << endl;
+    // cout << "here26" << endl;
 
     int bytes_recvd = -1;
     while(bytes_recvd < 0)
@@ -140,9 +140,9 @@ int main(int argc, char *argv[]) {
              cerr << "wrong message type received" << endl;
              exit(3);
           }
-          printf("MsgType: %u\n", client_hello->Header.MsgType);
-          printf("CommType: %u\n", client_hello->CommType);
-          printf("ClientNonce: %.*s\n", 32, client_hello->ClientNonce);
+          // printf("MsgType: %u\n", client_hello->Header.MsgType);
+          // printf("CommType: %u\n", client_hello->CommType);
+          // printf("ClientNonce: %.*s\n", 32, client_hello->ClientNonce);
           
       } else {
         cerr << "Payload size mismatch" << endl;
@@ -169,10 +169,10 @@ int main(int argc, char *argv[]) {
       size_t sig_size;
       if (ec_priv_key != NULL){
           sig_size = sign(client_nonce, 32, signature);
-          cout << "not exit early" << endl;
+          //cout << "not exit early" << endl;
       }
       else{
-          cout << "exit early" << endl;
+          cerr << "exit early" << endl;
           exit(3);
       }
       uint8_t s_size = sig_size;
@@ -184,30 +184,30 @@ int main(int argc, char *argv[]) {
       header.MsgType = 2;
       header.Padding = 0;
       header.MsgLen = htons(36 + sig_size + cert_size); //CHECK
-      cout << sizeof(header) << endl;
+      // cout << sizeof(header) << endl;
       
       memcpy(message, &header, sizeof(header));
 
-      cout << sizeof(using_mac) << endl;
+      // cout << sizeof(using_mac) << endl;
       memcpy(message + sizeof(header), &using_mac, sizeof(using_mac));
-      cout << sizeof(s_size) << endl;
+     // cout << sizeof(s_size) << endl;
       memcpy(message + sizeof(header) + sizeof(using_mac), &sig_size, sizeof(s_size));
-      cout << sizeof(c_size) << endl;
+     // cout << sizeof(c_size) << endl;
       memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size), &c_size, sizeof(c_size));
 
       char server_nonce[32];
       generate_nonce(server_nonce, 32);
-      cout << sizeof(server_nonce) << endl;
+      // cout << sizeof(server_nonce) << endl;
       memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size) + sizeof(c_size), &server_nonce, 32);
 
-      cout << cert_size << endl;
+     // cout << cert_size << endl;
       memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
-      printHex(message, sizeof(message));
-      cout << sig_size << endl;
-      cout << s_size << endl;
+      // printHex(message, sizeof(message));
+      // cout << sig_size << endl;
+      // cout << s_size << endl;
       memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
 
-      cout << sizeof(message) << endl;
+      // cout << sizeof(message) << endl;
       memcpy(server_hello, message, sizeof(message));
 
       // printHex(signature, sig_size);
@@ -251,7 +251,7 @@ int main(int argc, char *argv[]) {
             client_packet_expected++;
             ack_num = client_packet_expected - 1;
 
-            printf("MsgType: %u\n", key_exchange->Header.MsgType);
+            // printf("MsgType: %u\n", key_exchange->Header.MsgType);
             waiting_key_exchange = false;
             creating_finish = true;
           }
@@ -261,38 +261,38 @@ int main(int argc, char *argv[]) {
           char cert_ke[cert_size_key_exchange];
           char* cert_sig_data = key_exchange->ClientCertificate_ServerNonceSignature;
 
-          cout << cert_size_key_exchange << endl;
+          // cout << cert_size_key_exchange << endl;
           memcpy(&cert_ke, cert_sig_data, cert_size_key_exchange);
-          cout <<"cert" << endl;
+          // cout <<"cert" << endl;
 
           char* cert_data = cert_ke;
 
           struct Certificate* cert_ke_cert = (Certificate*)::operator new(cert_size_key_exchange);
           memcpy(cert_ke_cert, cert_data, cert_size_key_exchange);
-          cout << "parse cert" << endl;
+          // cout << "parse cert" << endl;
 
           uint16_t key_length_ke = ntohs(cert_ke_cert->KeyLength);
-          cout << key_length_ke << endl;
+          // cout << key_length_ke << endl;
 
           char* cert_ke_cert_pub_key_sig = cert_ke_cert->PublicKey_Signature;
           char cert_ke_pub_key[key_length_ke];
           memcpy(cert_ke_pub_key, cert_ke_cert_pub_key_sig, key_length_ke);
-          cout << "cert public key" << endl;
+          // cout << "cert public key" << endl;
 
           load_peer_public_key(cert_ke_pub_key, key_length_ke);
-          cout << "load public key" << endl;
+          // cout << "load public key" << endl;
 
           derive_secret();
-          cout << "derived secret" << endl;
+          // cout << "derived secret" << endl;
 
           if (using_mac){
             derive_keys();
           }
 
-          cout.flush();
+          // cout.flush();
 
           // fprintf(stderr, "This is secret: %s", secret);
-          printHex(secret, SECRET_SIZE);
+          // printHex(secret, SECRET_SIZE);
           // cout << secret << endl;
           
           struct SecurityHeader finish_message;
@@ -301,7 +301,7 @@ int main(int argc, char *argv[]) {
           finish_message.MsgLen = 0;
 
           create_packet(&send_pkt, seq_num++, ack_num, (const char*)&finish_message, sizeof(finish_message));
-          cout << "anything" << endl;
+          // cout << "anything" << endl;
           sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
           start_timer();
 
@@ -518,6 +518,7 @@ int main(int argc, char *argv[]) {
       }
     }
     /* 8. You're done! Terminate the connection */     
+    clean_up();
     close(serv_sockfd);
     return 0; 
 }

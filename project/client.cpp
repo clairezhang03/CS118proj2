@@ -165,8 +165,8 @@ int main(int argc, char *argv[]) {
             if (payload_size >= sizeof(struct ServerHello)) {
                 // Cast the payload to a ServerHello struct
                 server_hello = (ServerHello*)::operator new(payload_size);
-                cout << sizeof(server_hello) << endl;
-                cout << payload_size << endl;
+                // cout << sizeof(server_hello) << endl;
+                // cout << payload_size << endl;
                 memcpy(server_hello, received_pkt.payload, payload_size);
 
                 // char server_hello_msg[payload_size];
@@ -175,9 +175,9 @@ int main(int argc, char *argv[]) {
                 // printHex(server_hello_msg, payload_size);
 
                 // Access the fields of server_hello
-                printf("MsgType: %u\n", server_hello->Header.MsgType);
+                // printf("MsgType: %u\n", server_hello->Header.MsgType);
                 // printf("CommType: %u\n", server_hello->CommType);
-                printf("SigSize: %u\n", server_hello->SigSize);
+               //  printf("SigSize: %u\n", server_hello->SigSize);
                 // printf("CertSize: %u\n", ntohs(server_hello->CertSize));
                 // printf("ServerNonce: %.*s\n", 32, server_hello->ServerNonce);
                 // Assuming the Certificate structure has a printable field, e.g., data
@@ -202,9 +202,9 @@ int main(int argc, char *argv[]) {
           char* cert_sig_data = server_hello->ServerCertificate_ClientNonceSignature;
 
           memcpy(&cert, cert_sig_data, cert_size);
-          cout <<"cert" << endl;
+          // cout <<"cert" << endl;
           memcpy(&client_nonce_sig, cert_sig_data + cert_size, sig_size);
-          cout <<"client nonce sig" << endl;
+          // cout <<"client nonce sig" << endl;
 
           char* cert_data = cert;
 
@@ -212,7 +212,7 @@ int main(int argc, char *argv[]) {
           // parse_certificate(cert_data, &cert_nonce, cert_size);
         
           memcpy(cert_nonce, cert_data, cert_size);
-          cout << "parse cert" << endl;
+         //  cout << "parse cert" << endl;
 
 
           uint16_t key_length = ntohs(cert_nonce->KeyLength);
@@ -221,28 +221,28 @@ int main(int argc, char *argv[]) {
           // cout << cert_nonce->PublicKey_Signature << endl;
           char* cert_nonce_pub_key_sig = cert_nonce->PublicKey_Signature;
           memcpy(cert_sig, cert_nonce_pub_key_sig + key_length, cert_size - 4 - key_length);
-          cout << "cert_sig" << endl;
+         // cout << "cert_sig" << endl;
 
           char cert_pub_key[key_length];
           memcpy(cert_pub_key, cert_nonce_pub_key_sig, key_length);
-          cout << "cert public key" << endl;
+          //cout << "cert public key" << endl;
 
           char* cert_pub_key_data = cert_pub_key;
-          cout << "pubkey" << endl;
-          cout.flush();
-          fprintf(stderr, "This is server pubkey: %s", cert_pub_key);
-          fprintf(stderr, "\nThis is client pubkey: %s", public_key);
-          printHex(cert_pub_key, key_length);
+          // cout << "pubkey" << endl;
+          // cout.flush();
+          // fprintf(stderr, "This is server pubkey: %s", cert_pub_key);
+          // fprintf(stderr, "\nThis is client pubkey: %s", public_key);
+          // printHex(cert_pub_key, key_length);
           char* sig_data = cert_sig;
-          cout << "cert sig" << endl;
-          printHex(cert_sig, cert_size - 4 - key_length);
+          //cout << "cert sig" << endl;
+          // printHex(cert_sig, cert_size - 4 - key_length);
 
           load_ca_public_key(ca_public_key_file);
           // int ret = call_verify_cert(cert_pub_key_data, key_length, sig_data, key_length);
           int ret = verify(cert_pub_key_data, key_length, sig_data, cert_size - 4 - key_length, ec_ca_public_key);
-          cout << "verify cert" << endl;
+          //cout << "verify cert" << endl;
           if (ret != 1){
-            cout << "please no" << endl;
+            // cout << "please no" << endl;
             cerr << "server signature not verified" << endl;
             exit(3);
           }
@@ -250,12 +250,12 @@ int main(int argc, char *argv[]) {
 
           char* client_nonce_sig_data = client_nonce_sig;
           int ret_nonce = call_verify_nonce(client_hello.ClientNonce, 32, client_nonce_sig_data, server_hello->SigSize);
-          cout << "verify nonce" << endl;
+          //cout << "verify nonce" << endl;
           if (ret_nonce != 1){
             cerr << "client nonce not verified" << endl;
             exit(3);
           }
-          cout << "verified and good" << endl;
+          //cout << "verified and good" << endl;
 
           derive_secret();
           using_mac = server_hello->CommType;
@@ -268,7 +268,7 @@ int main(int argc, char *argv[]) {
           //sign the client's public key
           char client_cert_signature[255]; //am i ALLOCATING the CORRECT SIZE?
           size_t client_cert_sig_size = sign(public_key, pub_key_size, client_cert_signature);
-          cout << "client cert signed" << endl;
+          // cout << "client cert signed" << endl;
 
           uint16_t zero = 0;
 
@@ -287,16 +287,16 @@ int main(int argc, char *argv[]) {
           memcpy(client_cert_message + sizeof(uint16_t) + sizeof(uint16_t) + pub_key_size, &client_cert_signature, client_cert_sig_size);
           //client_cert created here
           memcpy(client_cert, client_cert_message, sizeof(client_cert_message));
-          cout << "pub_key_size " << pub_key_size << endl;
-          cout << "client cert sig size " << client_cert_sig_size << endl;
-          cout << "size of whole client cert " << sizeof(client_cert_message) << endl;
+          // cout << "pub_key_size " << pub_key_size << endl;
+          // cout << "client cert sig size " << client_cert_sig_size << endl;
+          // cout << "size of whole client cert " << sizeof(client_cert_message) << endl;
 
           char* server_nonce = server_hello->ServerNonce;
           char signature_nonce[255];
           size_t sig_size_nonce;
           if (ec_priv_key != NULL){
               sig_size_nonce = sign(server_nonce, 32, signature_nonce);
-              cout << "not exit early" << endl;
+              // cout << "not exit early" << endl;
           }
           else{
               cerr << "exit early" << endl;
@@ -324,20 +324,20 @@ int main(int argc, char *argv[]) {
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size), &client_cert_message_size, sizeof(uint16_t)); //CHECK
 
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t), &client_cert_message, sizeof(client_cert_message));
-          cout << "before" << endl;
-          cout << "1 client_cert_message_size " << sizeof(client_cert_message) << endl;
-          cout << "1 sig size server nonce " << sig_size_nonce << endl;
-          cout << "key exchange message size before signature " << sizeof(message) << endl;
+          // cout << "before" << endl;
+          // cout << "1 client_cert_message_size " << sizeof(client_cert_message) << endl;
+          // cout << "1 sig size server nonce " << sig_size_nonce << endl;
+          // cout << "key exchange message size before signature " << sizeof(message) << endl;
 
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t) + sizeof(client_cert_message), &signature_nonce, sig_size_nonce);
 
           memcpy(key_exchange, message, sizeof(message));
-          cout << "client_cert_message_size " << sizeof(client_cert_message) << endl;
-          cout << "sig size server nonce " << sig_size_nonce << endl;
-          cout << "key exchange message size " << sizeof(message) << endl;
-          cout << "MOM WE MADE IT" << endl;
+          // cout << "client_cert_message_size " << sizeof(client_cert_message) << endl;
+          // cout << "sig size server nonce " << sig_size_nonce << endl;
+          // cout << "key exchange message size " << sizeof(message) << endl;
+          // cout << "MOM WE MADE IT" << endl;
 
-          printHex(secret, SECRET_SIZE);
+         // printHex(secret, SECRET_SIZE);
 
           create_packet(&send_pkt, seq_num++, ack_num, (const char*)key_exchange, sizeof(message));
           sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
@@ -360,7 +360,7 @@ int main(int argc, char *argv[]) {
             finish_message = (struct SecurityHeader*)received_pkt.payload;
 
             uint8_t msg_type = finish_message->MsgType;
-            printf("MsgType: %u\n", finish_message->MsgType);
+            // printf("MsgType: %u\n", finish_message->MsgType);
             if (msg_type != 20){
               cerr << "wrong message type received" << endl;
               exit(3);
