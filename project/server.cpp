@@ -123,11 +123,11 @@ int main(int argc, char *argv[]) {
     //************************************************//
     // HANDLE SECURITY HANDSHAKE HERE
 
-    uint8_t comm_type = 0;
+    uint8_t using_mac = 0;
     struct ClientHello* client_hello;
     char* client_nonce;
 
-    if (use_security == 1){
+    if (use_security){
       //received_pkt --> payload
       uint16_t payload_size = ntohs(received_pkt.payload_size);
       if (payload_size == sizeof(struct ClientHello)) {
@@ -152,13 +152,13 @@ int main(int argc, char *argv[]) {
       client_packet_expected++;
       ack_num = client_packet_expected - 1;
       //set the comm_type as a flag
-      comm_type = client_hello->CommType;
+      using_mac = client_hello->CommType;
       client_nonce = client_hello->ClientNonce; //Check if &
-      printf("here2 ");
+      // printf("here2 ");
 
       //constructing and sending a ServerHello
       struct ServerHello* server_hello;
-      cout << sizeof(server_hello) << endl;
+      // cout << sizeof(server_hello) << endl;
       load_certificate(certificate_file);
       load_private_key(private_key_file);
       derive_public_key();
@@ -188,34 +188,34 @@ int main(int argc, char *argv[]) {
       
       memcpy(message, &header, sizeof(header));
 
-      cout << sizeof(comm_type) << endl;
-      memcpy(message + sizeof(header), &comm_type, sizeof(comm_type));
+      cout << sizeof(using_mac) << endl;
+      memcpy(message + sizeof(header), &using_mac, sizeof(using_mac));
       cout << sizeof(s_size) << endl;
-      memcpy(message + sizeof(header) + sizeof(comm_type), &sig_size, sizeof(s_size));
+      memcpy(message + sizeof(header) + sizeof(using_mac), &sig_size, sizeof(s_size));
       cout << sizeof(c_size) << endl;
-      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size), &c_size, sizeof(c_size));
+      memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size), &c_size, sizeof(c_size));
 
       char server_nonce[32];
       generate_nonce(server_nonce, 32);
       cout << sizeof(server_nonce) << endl;
-      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size), &server_nonce, 32);
+      memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size) + sizeof(c_size), &server_nonce, 32);
 
       cout << cert_size << endl;
-      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
+      memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size) + sizeof(c_size) + 32, certificate, cert_size);
       printHex(message, sizeof(message));
       cout << sig_size << endl;
       cout << s_size << endl;
-      memcpy(message + sizeof(header) + sizeof(comm_type) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
+      memcpy(message + sizeof(header) + sizeof(using_mac) + sizeof(s_size) + sizeof(c_size) + 32 + cert_size, &signature, sig_size);
 
       cout << sizeof(message) << endl;
       memcpy(server_hello, message, sizeof(message));
 
-      printHex(signature, sig_size);
+      // printHex(signature, sig_size);
 
 
-      cout << sizeof(server_hello) << endl;
+      // cout << sizeof(server_hello) << endl;
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)server_hello, sizeof(message));
-      cout << "anything" << endl;
+      // cout << "anything" << endl;
       sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
       start_timer();
 
@@ -285,7 +285,7 @@ int main(int argc, char *argv[]) {
           derive_secret();
           cout << "derived secret" << endl;
 
-          if (comm_type ==  1){
+          if (using_mac){
             derive_keys();
           }
 
@@ -338,10 +338,56 @@ int main(int argc, char *argv[]) {
         // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
         // cout << "Received from Client: ";
         // cout.flush(); 
-        write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
+       
+          if(use_security){
+            DataMessage* dm = (DataMessage*) (&received_pkt.payload);
+            printf("Ciphertext: ");
+            printHex(dm->payload, ntohs(dm->PayloadSize));
+            printf("IV: ");
+            printHex(dm->IV, 16);
+
+            // size_t decrypted_cipher_size = decrypt_cipher(data_message->payload, ntohs(data_message->PayloadSize), data_message->IV, decrypted_text, using_mac);
+            // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
+            // cout.flush();
+
+            if(using_mac){
+              // 1. Get the MAC code in the sent packet
+              char mac[32];
+              memcpy(mac, dm->payload + ntohs(dm->PayloadSize), 32);
+
+              // 2. Calculate the mac code again
+              char local_computed_mac[32];
+              hmac(dm->payload, ntohs(dm->PayloadSize), local_computed_mac);
+              // printf("**********************\n");
+              // printf("**********************\n");
+              // printf("Ciphertext: ");
+              // printHex(dm->payload, ntohs(dm->PayloadSize));
+              // cout << "\nPayload size: " << ntohs(dm->PayloadSize) << endl;
+              // cout.flush();
+              // printf("**********************\n");
+              // printf("**********************\n");
+              
+              // printf("MAC co: ");
+              // printHex(dm->payload + ntohs(dm->PayloadSize), 32);
+              // printf("Digest: ");
+              // printHex(local_computed_mac, 32);
+
+              // not the same --> digest
+              if (memcmp(local_computed_mac, mac, 32) != 0) {
+                cerr << "mac codes didn't match" << endl;
+                exit(3);
+              }
+            } 
+
+          char decrypted_text[MSS];
+          size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, decrypted_text, using_mac);
+          write(STDOUT_FILENO, decrypted_text, decrypted_cipher_size);
+          
+        } else {
+          write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
+        }
         client_packet_expected++;
       }
-
       // Create and send ACK packet, don't start timer for ACK
       ack_num = client_packet_expected - 1;
     }
@@ -395,8 +441,24 @@ int main(int argc, char *argv[]) {
               // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
               // cout << "Received from Client: ";
               // cout.flush(); 
-              write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
-              // cout << endl;
+              if(use_security){
+                DataMessage* dm = (DataMessage*) (&received_pkt.payload);
+                if(using_mac){
+                  // 1. Get the MAC code in the sent packet
+                  char mac[32];
+                  memcpy(mac, dm->payload + ntohs(dm->PayloadSize), 32);
+
+                  // 2. Calculate the mac code again
+                  char local_computed_mac[32];
+                  hmac(dm->payload, ntohs(dm->PayloadSize), local_computed_mac);
+                }
+                
+                char data[MSS];
+                size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, data, 0);
+                write(STDOUT_FILENO, data, decrypted_cipher_size);
+              } else {
+                write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
+              }
               client_packet_expected++;
             }
 
@@ -429,7 +491,12 @@ int main(int argc, char *argv[]) {
       char std_in_buffer [MSS];
       ssize_t bytes_read;
       if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS)) > 0) {
-        create_packet(&send_pkt, seq_num++, ack_num, (const char*) std_in_buffer, bytes_read);
+         if(use_security){
+           create_security_packet(&send_pkt, seq_num++, ack_num, std_in_buffer, bytes_read, using_mac);
+        } else {
+           create_packet(&send_pkt, seq_num++, ack_num, (const char*) std_in_buffer, bytes_read);
+        }
+
         send_packets_buff.push_back(send_pkt); // store in case of retransmission
         sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
         start_timer();

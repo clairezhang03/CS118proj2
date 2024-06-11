@@ -125,17 +125,14 @@ int main(int argc, char *argv[]) {
     //************************************************//
     //************************************************//
     // HANDLE SECURITY HANDSHAKE HERE
-    uint8_t comm_type = 0;
+    uint8_t using_mac = 0;
 
     if (use_security == 1){
       generate_private_key();
-
       derive_public_key();
-      cout << "pub" << endl;
-
 
       struct ClientHello client_hello;
-      create_client_hello(&client_hello, 1); //CHANGE? to comm_type
+      create_client_hello(&client_hello, 1); 
 
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)&client_hello, sizeof(client_hello));
       sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
@@ -261,10 +258,8 @@ int main(int argc, char *argv[]) {
           cout << "verified and good" << endl;
 
           derive_secret();
-
-          comm_type = server_hello->CommType;
-
-          if (server_hello->CommType ==  1){
+          using_mac = server_hello->CommType;
+          if (using_mac){
             derive_keys();
           }
 
@@ -420,9 +415,14 @@ int main(int argc, char *argv[]) {
             // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
             // cout << "Received from Server: ";
             // cout.flush(); 
-            write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
-            // cout << endl;
-
+            if(use_security){
+              DataMessage* dm = (DataMessage*) (&received_pkt.payload);
+              char data[MSS];
+              size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, data, 0);
+              write(STDOUT_FILENO, data, decrypted_cipher_size);
+            } else {
+              write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
+            }
             client_packet_expected++;
           }
 
@@ -455,8 +455,9 @@ int main(int argc, char *argv[]) {
       char std_in_buffer [MSS];
       ssize_t bytes_read;
       if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS)) > 0) {
-
-        create_packet(&send_pkt, seq_num++, ack_num, (const char*) std_in_buffer, bytes_read);
+         if(use_security){ create_security_packet(&send_pkt, seq_num++, ack_num, std_in_buffer, bytes_read, using_mac);}
+         else { create_packet(&send_pkt, seq_num++, ack_num, (const char*) std_in_buffer, bytes_read); }
+        
         send_packets_buff.push_back(send_pkt); // store in case of retransmission
         sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
         start_timer();
