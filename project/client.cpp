@@ -136,6 +136,7 @@ int main(int argc, char *argv[]) {
 
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)&client_hello, sizeof(client_hello));
       sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+      // cout << "sent client hello" << endl;
       start_timer();
 
       bool waiting_server_hello = true;
@@ -160,7 +161,7 @@ int main(int argc, char *argv[]) {
           int bytes_recvd = recvfrom(client_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &serv_addr, &server_size);
           if (bytes_recvd > 0) {
             //receive server hello
-
+            // cout << "received server hello" << endl;
             uint16_t payload_size = ntohs(received_pkt.payload_size);
             if (payload_size >= sizeof(struct ServerHello)) {
                 // Cast the payload to a ServerHello struct
@@ -332,6 +333,7 @@ int main(int argc, char *argv[]) {
           memcpy(message + sizeof(header) + sizeof(uint8_t) + sizeof(s_size) + sizeof(uint16_t) + sizeof(client_cert_message), &signature_nonce, sig_size_nonce);
 
           memcpy(key_exchange, message, sizeof(message));
+          // cout << sizeof(message) << endl;
           // cout << "client_cert_message_size " << sizeof(client_cert_message) << endl;
           // cout << "sig size server nonce " << sig_size_nonce << endl;
           // cout << "key exchange message size " << sizeof(message) << endl;
@@ -341,12 +343,12 @@ int main(int argc, char *argv[]) {
 
           create_packet(&send_pkt, seq_num++, ack_num, (const char*)key_exchange, sizeof(message));
           sendto(client_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+          // cout << "sent key exchange" << endl;
           start_timer();
 
           create_key_exchange = false;
           waiting_finish_message = true;
         } else if (waiting_finish_message){
-
           //retransmission
           if(timer_on && timer_expired()){
             //resend key_exchange
@@ -366,6 +368,7 @@ int main(int argc, char *argv[]) {
               exit(3);
             }
             //update expected for receive buffer
+            // cout << "received finish" << endl;
             client_packet_expected++;
             ack_num = client_packet_expected - 1;
             break;
@@ -374,11 +377,14 @@ int main(int argc, char *argv[]) {
       }
     }
 
+    // cout << "handshake done" << endl;
+
     //================================================//
     //================================================//
 
     while(true){
       // 1. Check if timer expired --> retransmit
+      // cout << "wooorrrdddd" << endl;
       if(timer_on && timer_expired()){
         if (received_cum_ack + 1 < send_packets_buff.size()){
           // cout << "timer expired" << endl;
@@ -418,7 +424,7 @@ int main(int argc, char *argv[]) {
             if(use_security){
               DataMessage* dm = (DataMessage*) (&received_pkt.payload);
               char data[MSS];
-              size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, data, 0);
+              size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, data, using_mac);
               write(STDOUT_FILENO, data, decrypted_cipher_size);
             } else {
               write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
@@ -455,7 +461,8 @@ int main(int argc, char *argv[]) {
       int buffer_size = use_security ? SECURITY_MSS : MSS;
       char std_in_buffer [buffer_size];
       ssize_t bytes_read;
-      if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, MSS)) > 0) {
+      if (!cwnd_full && (bytes_read = read(STDIN_FILENO, std_in_buffer, buffer_size)) > 0) {
+        //  cout << "yooooo" << endl;
          if(use_security){ create_security_packet(&send_pkt, seq_num++, ack_num, std_in_buffer, bytes_read, using_mac);}
          else { create_packet(&send_pkt, seq_num++, ack_num, (const char*) std_in_buffer, bytes_read); }
         

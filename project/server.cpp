@@ -119,6 +119,9 @@ int main(int argc, char *argv[]) {
     while(bytes_recvd < 0)
       bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
 
+    // cout << "received client hello" << endl;
+
+    // cout << "client hello bytes received" << bytes_recvd << endl;
     //************************************************//
     //************************************************//
     // HANDLE SECURITY HANDSHAKE HERE
@@ -217,6 +220,7 @@ int main(int argc, char *argv[]) {
       create_packet(&send_pkt, seq_num++, ack_num, (const char*)server_hello, sizeof(message));
       // cout << "anything" << endl;
       sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+      // cout << "sent server hello" << endl;
       start_timer();
 
       bool waiting_key_exchange = true;
@@ -236,6 +240,7 @@ int main(int argc, char *argv[]) {
 
           bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
           if (bytes_recvd > 0) {
+            // cout << "received key exchange" << endl;
             //receive key exchange
             uint16_t payload_size = ntohs(received_pkt.payload_size);
             key_exchange = (KeyExchangeRequest*)::operator new(payload_size);
@@ -243,7 +248,7 @@ int main(int argc, char *argv[]) {
             memcpy(key_exchange, received_pkt.payload, payload_size);
             uint8_t msg_type = key_exchange->Header.MsgType;
             if (msg_type != 16){
-              cout << "message type: " << msg_type << endl;
+              // cout << "message type: " << msg_type << endl;
               cerr << "wrong message type received-- expected key exchange" << endl;
               exit(3);
             }
@@ -304,24 +309,27 @@ int main(int argc, char *argv[]) {
           create_packet(&send_pkt, seq_num++, ack_num, (const char*)&finish_message, sizeof(finish_message));
           // cout << "anything" << endl;
           sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+          // cout << "sent finish message" << endl;
           start_timer();
 
           creating_finish = false;
           break;
         }
       }
+      // cout << bytes_recvd << endl;
 
       int bytes_recvd = -1;
       while(bytes_recvd < 0){
         //resubmission
-        if(timer_on && timer_expired()){
-            //resend finishmessage
-            sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
-            start_timer();
-        }
+        // if(timer_on && timer_expired()){
+        //     //resend finishmessage
+        //     sendto(serv_sockfd, &send_pkt, sizeof(send_pkt), 0, (struct sockaddr *) &client_addr, sizeof(client_addr));
+        //     start_timer();
+        // }
         bytes_recvd = recvfrom(serv_sockfd, &received_pkt, sizeof(received_pkt), 0, (struct sockaddr*) &client_addr, &client_size);
       }
     }
+    // cout << "heeeeee" << endl;
 
     //************************************************//
     //************************************************//
@@ -334,6 +342,8 @@ int main(int argc, char *argv[]) {
       received[received_pkt_number] = true;
     
       while (received[client_packet_expected]){
+
+        // cout << "guap" << endl;
         Packet pkt = receive_buffer[client_packet_expected];
         // printf("packet_number: %d, ack_number: %d, payload_size: %d, padding: %d,  payload: %s\n", 
         // pkt.packet_number, pkt.ack_number, pkt.payload_size, pkt.padding, pkt.payload);
@@ -342,10 +352,10 @@ int main(int argc, char *argv[]) {
        
           if(use_security){
             DataMessage* dm = (DataMessage*) (&received_pkt.payload);
-            printf("Ciphertext: ");
-            printHex(dm->payload, ntohs(dm->PayloadSize));
-            printf("IV: ");
-            printHex(dm->IV, 16);
+            // printf("Ciphertext: ");
+            // printHex(dm->payload, ntohs(dm->PayloadSize));
+            // printf("IV: ");
+            // printHex(dm->IV, 16);
 
             // size_t decrypted_cipher_size = decrypt_cipher(data_message->payload, ntohs(data_message->PayloadSize), data_message->IV, decrypted_text, using_mac);
             // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
@@ -432,6 +442,7 @@ int main(int argc, char *argv[]) {
 
           //Case 1: Received packet contains data
           if(received_pack_num != 0){
+            // cout << "received data" << endl;
             //one packet received at a time
             receive_buffer[received_pack_num] = received_pkt;
             received[received_pack_num] = true;
@@ -443,8 +454,10 @@ int main(int argc, char *argv[]) {
               // cout << "Received from Client: ";
               // cout.flush(); 
               if(use_security){
+                // cout << "in use_security" << endl;
                 DataMessage* dm = (DataMessage*) (&received_pkt.payload);
                 if(using_mac){
+                  // cout << "in using_mac" << endl;
                   // 1. Get the MAC code in the sent packet
                   char mac[32];
                   memcpy(mac, dm->payload + ntohs(dm->PayloadSize), 32);
@@ -453,10 +466,12 @@ int main(int argc, char *argv[]) {
                   char local_computed_mac[32];
                   hmac(dm->payload, ntohs(dm->PayloadSize), local_computed_mac);
                 }
+                // cout << "leaving using mac" << endl;
                 
                 char data[MSS];
-                size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, data, 0);
+                size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, data, using_mac);
                 write(STDOUT_FILENO, data, decrypted_cipher_size);
+                // cout << "oh what da hellll" << endl;
               } else {
                 write(STDOUT_FILENO, pkt.payload, ntohs(pkt.payload_size));
               }

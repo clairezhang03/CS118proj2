@@ -381,19 +381,19 @@ uint16_t create_data_message(struct DataMessage* data_message, unsigned int byte
         char digest[32];
         hmac(data_message->payload, ntohs(data_message->PayloadSize), digest);
         // hmac(cipher_text, encrypted_payload_size, digest);
-         printf("**********************\n");
-        printf("**********************\n");
-        printf("Ciphertext: ");
-        printHex(data_message->payload, ntohs(data_message->PayloadSize));
-        cout << "Payload size: " << ntohs(data_message->PayloadSize) << endl;
-        cout.flush();
-        printf("MAC code: ");
-        printHex(digest, 32);
-        cout.flush();
-        printf("IV: ");
-        printHex(data_message->IV, 16);
-        printf("**********************\n");
-        printf("**********************\n");
+        //  printf("**********************\n");
+        // printf("**********************\n");
+        // printf("Ciphertext: ");
+        // printHex(data_message->payload, ntohs(data_message->PayloadSize));
+        // cout << "Payload size: " << ntohs(data_message->PayloadSize) << endl;
+        // cout.flush();
+        // printf("MAC code: ");
+        // printHex(digest, 32);
+        // cout.flush();
+        // printf("IV: ");
+        // printHex(data_message->IV, 16);
+        // printf("**********************\n");
+        // printf("**********************\n");
 
         memcpy(data_message->payload + encrypted_payload_size, digest, 32);
     }
@@ -405,13 +405,13 @@ uint16_t create_data_message(struct DataMessage* data_message, unsigned int byte
     // printf("IV: ");
     // printHex(data_message->IV, 16);
     size_t decrypted_cipher_size = decrypt_cipher(data_message->payload, ntohs(data_message->PayloadSize), data_message->IV, decrypted_text, using_mac);
-    cout << "decrypted_cipher_size: " << decrypted_cipher_size << endl;
-    printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
-    cout.flush();
+    // cout << "decrypted_cipher_size: " << decrypted_cipher_size << endl;
+    // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
+    // cout.flush();
 
     // security header + (payload size & padding) + iv + payload
     int data_message_size = 24 + encrypted_payload_size;
-    cout << "why" << endl;
+    // cout << "why" << endl;
     return using_mac ? data_message_size + 32 : data_message_size;
 }
 
@@ -423,12 +423,12 @@ void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned
     //1. Create a data message struct
     struct DataMessage data_message;
     uint16_t data_message_size = create_data_message(&data_message, bytes_read, payload_buff, using_mac);
-    cout << "ONE" << endl;
+    // cout << "ONE" << endl;
     pkt->payload_size = htons(data_message_size); // either size 1024 or less
-    cout << "TWO" << endl;
+    // cout << "TWO" << endl;
     // Copy the DataMessage to the Packet payload
     memcpy(pkt->payload, &data_message, sizeof(data_message));
-    cout << "THREE" << endl;
+    // cout << "THREE" << endl;
 
     DataMessage* dm = (DataMessage*) (&(pkt->payload));
     // char decrypted_text[MSS];
@@ -436,18 +436,18 @@ void create_security_packet(struct Packet* pkt, unsigned short seq_num, unsigned
     // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
     // cout.flush();
 
-    cout << "I AM HERE " << endl;
+    // cout << "I AM HERE " << endl;
     char decrypted_text[MSS];
-    printf("Ciphertext: ");
-    printHex(dm->payload, ntohs(dm->PayloadSize));
-    printf("IV: ");
-    printHex(dm->IV, 16);
-    printf("MAC code: ");
-    printHex(dm->payload + ntohs(dm->PayloadSize), 32);
+    // printf("Ciphertext: ");
+    // printHex(dm->payload, ntohs(dm->PayloadSize));
+    // printf("IV: ");
+    // printHex(dm->IV, 16);
+    // printf("MAC code: ");
+    // printHex(dm->payload + ntohs(dm->PayloadSize), 32);
     
     size_t decrypted_cipher_size = decrypt_cipher(dm->payload, ntohs(dm->PayloadSize), dm->IV, decrypted_text, using_mac);
-    printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
-    cout.flush();
+    // printf("Decrypted plaintext: %.*s\n", decrypted_cipher_size, decrypted_text);
+    // cout.flush();
 }
 
 
